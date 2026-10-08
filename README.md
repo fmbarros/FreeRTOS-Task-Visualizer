@@ -1,5 +1,6 @@
 # FreeRTOS Task Visualizer
 
+[![Simulador Online](https://img.shields.io/badge/Aceder%20Online-GitHub%20Pages-brightgreen.svg)](https://fmbarros.github.io/FreeRTOS-Task-Visualizer/)
 [![Versão](https://img.shields.io/badge/versão-v1.0.0-00e5ff.svg)](CHANGELOG.md)
 [![Licença: CC BY-NC-ND 4.0](https://img.shields.io/badge/Licen%C3%A7a-CC%20BY--NC--ND%204.0-lightgrey.svg)](LICENSE.md)
 [![Instituição](https://img.shields.io/badge/Institui%C3%A7%C3%A3o-UPTomar%20%2F%20IPT-ffab00.svg)](https://www.ipt.pt)
