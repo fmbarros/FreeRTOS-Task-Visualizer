@@ -1,0 +1,62 @@
+================================================================================
+                    FreeRTOS Task Visualizer — Versão 1.0.0
+================================================================================
+
+Autor: Manuel Barros (fmbarros@univpt.pt)
+Instituição: Universidade Politécnica de Tomar (UPTomar) / Instituto Politécnico de Tomar (IPT)
+Unidade Curricular: Sistemas Distribuídos de Controlo (SDC)
+Cursos: Licenciatura em Engenharia Informática | Licenciatura em Engenharia Eletrotécnica
+Data de Lançamento da Versão 1.0.0: 8 de Outubro de 2026
+
+--------------------------------------------------------------------------------
+1. IDENTIFICAÇÃO E OBJETIVO PEDAGÓGICO
+--------------------------------------------------------------------------------
+O FreeRTOS Task Visualizer é uma ferramenta computacional interativa concebida
+para apoiar o ensino-aprendizagem de sistemas operativos de tempo real (RTOS).
+Permite aos estudantes visualizar e experimentar com:
+- Escalonamento preemptivo por prioridades fixas;
+- Transições de estados de tarefas do FreeRTOS (Running, Ready, Blocked, Suspended);
+- Mecanismos de temporização baseados em ticks de sistema (1 tick = 1 ms);
+- Comportamento de chamadas de sistema (vTaskDelay, vTaskSuspend, vTaskResume);
+- Análise temporal através de um analisador lógico virtual integrado.
+
+--------------------------------------------------------------------------------
+2. DIREITOS DE AUTOR E CONDIÇÕES DE USO
+--------------------------------------------------------------------------------
+Copyright (c) 2026 Manuel Barros — Instituto Politécnico de Tomar.
+Todos os direitos reservados. Não é permitida a redistribuição ou adaptação
+sem autorização prévia expressa do autor.
+
+Licença Creative Commons: CC BY-NC-ND 4.0 (Atribuição-NãoComercial-SemDerivações)
+- Permissão de consulta e utilização reservada aos estudantes e docentes autorizados.
+- Proibida qualquer utilização comercial, reprodução pública ou descompilação.
+
+--------------------------------------------------------------------------------
+3. COMO EXECUTAR
+--------------------------------------------------------------------------------
+O simulador é 100% autónomo (executa em qualquer navegador moderno sem necessidade
+de servidor Web nem instalação de pacotes):
+
+- Versão de Produção (Minificada/Ofuscada):
+  Abra o ficheiro "index.html" ou "dist/freertos-task-visualizer.min.html" no browser.
+
+- Versão com Código-Fonte Pedagógico:
+  Abra o ficheiro "freertos-task-visualizer.html" ou "src/freertos-task-visualizer.html".
+
+--------------------------------------------------------------------------------
+4. PLANEAMENTO DE VERSÕES (ROADMAP)
+--------------------------------------------------------------------------------
+v1.0.0  — Primeira versão oficial disponibilizada (versão atual)
+v1.1.0  — Nova funcionalidade ou novo conjunto de exercícios práticos guiados (Next)
+v1.1.1  — Correções de renderização sem alterar os objetivos pedagógicos (Next)
+v2.0.0  — Alteração substancial da interface, conteúdos avançados e avaliação (Next)
+
+--------------------------------------------------------------------------------
+5. PROVAS DE AUTORIA E INTEGRIDADE
+--------------------------------------------------------------------------------
+O diretório "evidence/" contém o registo detalhado das somas de verificação SHA-256
+de todas as entregas e ficheiros do projeto para fins de auditoria e arquivo.
+
+Contacto do autor: fmbarros@univpt.pt
+Repositório GitHub: https://github.com/fmbarros/FreeRTOS-Task-Visualizer
+================================================================================

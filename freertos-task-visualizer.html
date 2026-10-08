@@ -1,0 +1,1739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="author" content="Manuel Barros">
+<meta name="copyright" content="© 2026 Manuel Barros, UPTomar">
+<meta name="description" content="Recurso didático de Sistemas Distribuidos de Controlo — Manuel Barros, IPT">
+<link rel="license" href="https://creativecommons.org/licenses/by-nc-nd/4.0/">
+<title>FreeRTOS Task Visualizer (v1.0.0) — Interactive Learning Tool</title>
+<!--
+================================================================================
+  FreeRTOS Task Visualizer — Versão 1.0.0 (v1.0.0)
+  Autor: Manuel Barros (fmbarros@univpt.pt)
+  Instituição: Universidade Politécnica de Tomar (UPTomar) / IPT
+  Unidade Curricular: Sistemas Distribuídos de Controlo (SDC)
+
+  Copyright © 2026 Manuel Barros — Instituto Politécnico de Tomar.
+  Todos os direitos reservados. Não é permitida a redistribuição
+  ou adaptação sem autorização.
+  Licença Creative Commons: CC BY-NC-ND 4.0
+================================================================================
+-->
+<style>
+:root {
+  --bg:        #070a0f;
+  --surface:   #0d1117;
+  --s2:        #161b22;
+  --s3:        #21262d;
+  --border:    #222a33;
+  --border2:   #2d3748;
+  --text:      #cdd9e5;
+  --muted:     #556270;
+  --muted2:    #8896a5;
+
+  --running:   #00e676;
+  --running-d: rgba(0,230,118,.15);
+  --ready:     #ffab00;
+  --ready-d:   rgba(255,171,0,.15);
+  --blocked:   #448aff;
+  --blocked-d: rgba(68,138,255,.15);
+
+  --t0:        #00e5ff;   /* task 1 — cyan  */
+  --t0-d:      rgba(0,229,255,.12);
+  --t1:        #ce93d8;   /* task 2 — lilac */
+  --t1-d:      rgba(206,147,216,.12);
+  --t2:        #f06292;   /* task 3 — pink   */
+  --t2-d:      rgba(240,98,146,.12);
+  --t3:        #ff8a65;   /* task 4 — coral  */
+  --t3-d:      rgba(255,138,101,.12);
+  --susp:      #6b7785;
+  --susp-d:    rgba(107,119,133,.15);
+
+  --mono: Consolas, 'Cascadia Code', 'Courier New', monospace;
+  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-size: 13px;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+input, select, textarea {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+/* ── Header ─────────────────────────────────── */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  height: 44px;
+  flex-shrink: 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  letter-spacing: -.01em;
+  white-space: nowrap;
+}
+.brand-icon {
+  width: 26px; height: 26px;
+  background: var(--s3);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+}
+.brand-tag {
+  font-size: 0.62rem; font-weight: 600;
+  background: var(--blocked-d);
+  color: var(--blocked);
+  border: 1px solid rgba(68,138,255,.3);
+  border-radius: 3px;
+  padding: 1px 5px;
+  letter-spacing: .03em;
+}
+
+.sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+
+.ctrl-bar {
+  display: flex; align-items: center; gap: 8px; margin-left: auto;
+}
+
+.btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 12px;
+  background: var(--s2);
+  border: 1px solid var(--border2);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 0.78rem; font-weight: 600;
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+  font-family: var(--sans);
+}
+.btn:hover { background: var(--s3); }
+.btn.go   { background: var(--running-d); border-color: rgba(0,230,118,.4); color: var(--running); }
+.btn.go:hover { background: rgba(0,230,118,.25); }
+.btn.rst  { border-color: rgba(255,100,100,.3); color: #ff6b6b; }
+.btn.rst:hover { background: rgba(255,100,100,.1); }
+.btn.step { border-color: rgba(68,138,255,.4); color: var(--blocked); }
+.btn.step:hover { background: var(--blocked-d); }
+
+.spd { display: flex; align-items: center; gap: 6px; font-size: 0.74rem; color: var(--muted2); }
+.spd input { width: 110px; accent-color: var(--blocked); cursor: pointer; }
+#spd-val { font-family: var(--mono); font-weight: 700; font-size: 0.78rem; color: var(--text); min-width: 24px; }
+#spd-tps { font-family: var(--mono); font-size: 0.66rem; color: var(--muted); min-width: 64px; }
+
+/* ── Main grid ──────────────────────────────── */
+main {
+  flex: 1; min-height: 0;
+  display: grid;
+  grid-template-columns: 300px 1fr 238px;
+  grid-template-rows: 1fr 180px;
+}
+
+/* ── Shared panel chrome ─────────────────────── */
+.panel { border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+.pnl-hd {
+  padding: 6px 12px;
+  font-size: 0.62rem; font-weight: 700; letter-spacing: .07em;
+  color: var(--muted);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
+/* ── Task Panel ─────────────────────────────── */
+.tasks-panel { grid-row: 1; overflow-y: auto; }
+
+.tc {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.tc-hd {
+  display: flex; align-items: center; gap: 9px;
+  margin-bottom: 10px;
+}
+.tc-ico {
+  width: 32px; height: 32px; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem; flex-shrink: 0;
+}
+.tc0 .tc-ico { background: var(--t0-d); }
+.tc1 .tc-ico { background: var(--t1-d); }
+.tc2 .tc-ico { background: var(--t2-d); }
+.tc3 .tc-ico { background: var(--t3-d); }
+.tc.disabled .tc-ico, .tc.disabled .stats, .tc.disabled .bbar, .tc.disabled .cfg, .tc.disabled .action-box { opacity: .4; }
+.tc.disabled .tc-name { text-decoration: line-through; color: var(--muted2); }
+
+/* enable / disable switch */
+.sw { position: relative; width: 30px; height: 16px; flex-shrink: 0; cursor: pointer; }
+.sw input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.sw span { position: absolute; inset: 0; pointer-events: none; background: var(--s3); border: 1px solid var(--border2); border-radius: 16px; transition: background .15s; }
+.sw span::before { content: ''; position: absolute; left: 2px; top: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--muted2); transition: transform .15s, background .15s; }
+.sw input:checked + span { background: var(--running-d); border-color: rgba(0,230,118,.4); }
+.sw input:checked + span::before { transform: translateX(14px); background: var(--running); }
+.sw input:focus-visible + span { outline: 2px solid var(--blocked); outline-offset: 1px; }
+
+.tc-meta { flex: 1; min-width: 0; }
+.tc-name { font-weight: 700; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-fn   { font-family: var(--mono); font-size: 0.64rem; color: var(--muted2); margin-top: 1px; }
+
+.spill { /* state pill */
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 0.6rem; font-weight: 700; letter-spacing: .04em;
+  transition: all .2s;
+  flex-shrink: 0;
+}
+.s-RUNNING { background: var(--running-d); color: var(--running); border: 1px solid rgba(0,230,118,.4); }
+.s-READY   { background: var(--ready-d);   color: var(--ready);   border: 1px solid rgba(255,171,0,.4); }
+.s-BLOCKED { background: var(--blocked-d); color: var(--blocked); border: 1px solid rgba(68,138,255,.4); }
+.s-SUSPENDED { background: var(--susp-d); color: var(--susp); border: 1px solid rgba(107,119,133,.4); }
+
+.stats {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px; margin-bottom: 8px;
+}
+.stat {
+  background: var(--s2); border-radius: 5px;
+  padding: 6px 5px; text-align: center;
+}
+.stat-v { font-family: var(--mono); font-size: 0.92rem; font-weight: 700; }
+.stat-l { font-size: 0.56rem; color: var(--muted); margin-top: 1px; letter-spacing: .03em; text-transform: uppercase; }
+
+.bbar { height: 3px; background: var(--s3); border-radius: 2px; margin-bottom: 9px; overflow: hidden; }
+.bbar-fill { height: 100%; background: var(--blocked); border-radius: 2px; transition: width .1s linear; }
+
+.cfg { display: flex; align-items: center; gap: 5px; margin-bottom: 6px; }
+.cfg-l { font-size: 0.72rem; color: var(--muted2); width: 66px; flex-shrink: 0; }
+.cfg input[type=range] { flex: 1; min-width: 0; accent-color: var(--blocked); cursor: pointer; }
+.cfg-v { font-family: var(--mono); font-size: 0.72rem; font-weight: 700; width: 38px; text-align: right; }
+
+.action-box {
+  background: var(--s2); border-radius: 5px;
+  padding: 6px 8px;
+  font-size: 0.69rem; color: var(--muted2);
+  display: flex; align-items: center; gap: 6px;
+  min-height: 28px;
+}
+
+/* LED */
+.led-wrap { display: flex; align-items: center; justify-content: center; }
+.led {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: #1a2a1a; border: 2px solid #1e3a1e;
+  transition: all .08s;
+}
+.led.on {
+  background: var(--running);
+  border-color: #5affaa;
+  box-shadow: 0 0 7px var(--running), 0 0 14px rgba(0,230,118,.4);
+}
+
+/* hint box */
+.hint-box {
+  padding: 12px;
+  font-size: 0.71rem; line-height: 1.6; color: var(--muted2);
+}
+.hint-box strong { color: var(--text); }
+.hint-row { display: flex; align-items: center; gap: 5px; margin-top: 3px; }
+.hdot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* ── CPU Panel ──────────────────────────────── */
+.cpu-panel {
+  grid-row: 1;
+  background: #05080c;
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: flex-start;
+  gap: 16px; padding: 22px 18px 18px;
+  position: relative; overflow-x: hidden; overflow-y: auto;
+}
+.cpu-panel::before {
+  content: '';
+  position: absolute;
+  top: 45%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 320px;
+  height: 110px;
+  background: url("data:image/png;base64,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EBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQ2P8HM1dcoFQskX0AAAAASUVORK5CYII=") no-repeat center / contain;
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: 0;
+}
+.cpu-top { display: flex; align-items: center; gap: 20px; flex-shrink: 0; position: relative; z-index: 1; }
+.inst-logo-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  background: rgba(13, 17, 23, 0.7);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  opacity: 0.88;
+  transition: opacity .25s ease, border-color .25s ease, transform .2s ease;
+  backdrop-filter: blur(4px);
+}
+.inst-logo-wrap:hover {
+  opacity: 1;
+  border-color: var(--border2);
+  transform: translateY(-1px);
+}
+.inst-logo {
+  height: 44px;
+  width: auto;
+  max-width: 135px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.6));
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+.inst-logo-label {
+  font-size: 0.56rem;
+  letter-spacing: .06em;
+  color: var(--muted2);
+  text-transform: uppercase;
+  margin-top: 4px;
+  font-weight: 600;
+}
+.tick-col { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.cpu-glow {
+  position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse 60% 40% at 50% 45%,
+    rgba(68,138,255,.05) 0%, transparent 70%);
+}
+
+.vtime-bar {
+  font-family: var(--mono); font-size: 0.72rem;
+  color: var(--muted); letter-spacing: .03em;
+}
+#vtime-val { color: var(--text); }
+
+.chip {
+  width: 120px; height: 120px; border-radius: 18px; flex-shrink: 0;
+  border: 2px solid var(--border2);
+  background: var(--surface);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 5px;
+  transition: border-color .35s;
+  position: relative;
+}
+.chip::before, .chip::after {
+  content: '';
+  position: absolute;
+  width: calc(100% + 10px);
+  height: calc(100% + 10px);
+  border-radius: 22px;
+  border: 1px solid transparent;
+  transition: border-color .35s, opacity .35s;
+  opacity: 0;
+}
+.chip.running { border-color: var(--tc); animation: glow 1.1s ease-in-out infinite; }
+.chip.running::before { border-color: var(--tc); opacity: .35; }
+.chip.running::after  { border-color: var(--tc); opacity: .12; width: calc(100% + 20px); height: calc(100% + 20px); border-radius: 26px; }
+
+.chip-tag   { font-size: 0.58rem; font-weight: 700; letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+.chip-emoji { font-size: 1.7rem; line-height: 1; }
+.chip-name  { font-size: 0.88rem; font-weight: 700; }
+.chip-sub   { font-size: 0.63rem; color: var(--muted2); font-family: var(--mono); }
+
+.tick-blk { text-align: center; }
+.tick-n   { font-family: var(--mono); font-size: 2.2rem; font-weight: 700; color: var(--blocked); line-height: 1; }
+.tick-lbl { font-size: 0.62rem; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; margin-top: 2px; }
+
+.sched-card {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 9px;
+  padding: 10px 13px;
+  width: 100%; max-width: 520px; flex-shrink: 0;
+}
+.sched-card-hd {
+  font-size: 0.6rem; font-weight: 700; letter-spacing: .07em;
+  color: var(--muted); text-transform: uppercase;
+  margin-bottom: 5px; display: flex; align-items: center; gap: 5px;
+}
+.sched-card-hd span { color: var(--ready); }
+#sched-msg {
+  font-size: 0.76rem; line-height: 1.55; color: var(--text);
+}
+
+/* ── Task state diagram ─────────────────────── */
+.diag-card {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 9px;
+  padding: 10px 13px 12px;
+  width: 100%; max-width: 520px; flex-shrink: 0;
+}
+.diag-card .sched-card-hd { justify-content: space-between; }
+.diag-card .sched-card-hd i { font-style: normal; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--muted); }
+#state-svg { width: 100%; height: auto; display: block; user-select: none; }
+#state-svg text { font-family: var(--sans); }
+.d-node rect { fill: var(--s2); stroke-width: 1.6; transition: fill .2s, stroke-opacity .2s, stroke-width .2s; cursor: help; }
+.d-node.n-RUNNING   rect { stroke: var(--running); }
+.d-node.n-READY     rect { stroke: var(--ready); }
+.d-node.n-BLOCKED   rect { stroke: var(--blocked); }
+.d-node.n-SUSPENDED rect { stroke: var(--susp); }
+.d-node rect { stroke-opacity: .45; }
+.d-node.occ rect { stroke-opacity: 1; stroke-width: 2.2; }
+.d-node.n-RUNNING.occ   rect { fill: var(--running-d); }
+.d-node.n-READY.occ     rect { fill: var(--ready-d); }
+.d-node.n-BLOCKED.occ   rect { fill: var(--blocked-d); }
+.d-node.n-SUSPENDED.occ rect { fill: var(--susp-d); }
+.d-node.hov rect { stroke-opacity: 1; stroke-width: 2.6; }
+.d-node .nm { font-size: 13px; font-weight: 700; fill: var(--text); text-anchor: middle; pointer-events: none; }
+.d-node .ct { font-size: 10px; font-family: var(--mono); fill: var(--muted2); text-anchor: end; pointer-events: none; }
+.d-edge .ln { fill: none; stroke: #3b4756; stroke-width: 1.6; }
+.d-edge .ah { fill: #3b4756; }
+.d-edge .hit { fill: none; stroke: transparent; stroke-width: 14; cursor: help; pointer-events: stroke; }
+.d-edge .lb { font-size: 10.5px; font-weight: 600; fill: #6f8be0; text-anchor: middle; paint-order: stroke; stroke: #0d1117; stroke-width: 4px; stroke-linejoin: round; pointer-events: none; }
+.d-edge .lb .n { fill: var(--muted2); font-family: var(--mono); font-weight: 400; }
+.d-edge.hov .ln { stroke: var(--text); stroke-width: 2.2; }
+.d-edge.hov .ah { fill: var(--text); }
+.d-tok { pointer-events: all; cursor: pointer; }
+.d-tok circle { stroke: rgba(0,0,0,.55); stroke-width: 1; }
+.d-tok text { font-size: 9.5px; font-weight: 800; fill: #05080c; text-anchor: middle; pointer-events: none; font-family: var(--mono); }
+.d-tok.dim { opacity: .28; }
+.d-tok.focus circle { stroke: #fff; stroke-width: 2; }
+.d-fly circle { stroke: #fff; stroke-width: 1.2; filter: drop-shadow(0 0 4px currentColor); }
+.d-fly text { font-size: 9.5px; font-weight: 800; fill: #05080c; text-anchor: middle; pointer-events: none; font-family: var(--mono); }
+.d-start { fill: var(--muted2); }
+.diag-legend { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.dl-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px 2px 3px; border-radius: 20px;
+  background: var(--s2); border: 1px solid var(--border2);
+  font-size: 0.64rem; font-weight: 600; color: var(--muted2);
+  cursor: pointer; user-select: none; font-family: var(--sans);
+}
+.dl-chip:hover { background: var(--s3); }
+.dl-chip.focus { color: var(--text); border-color: var(--muted2); }
+.dl-chip.off { opacity: .45; }
+.dl-dot { width: 14px; height: 14px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 8.5px; font-weight: 800; color: #05080c; font-family: var(--mono); }
+.diag-cap {
+  margin-bottom: 6px; padding: 6px 9px; min-height: 44px;
+  background: var(--s2); border-radius: 5px; border-left: 2px solid var(--blocked);
+  font-size: 0.7rem; line-height: 1.5; color: var(--muted2);
+}
+.diag-cap b { color: var(--text); }
+.diag-cap .tr { font-family: var(--mono); font-size: 0.66rem; }
+.log-e[data-edge] { cursor: pointer; }
+.log-e[data-edge]:hover { background: var(--s3); }
+
+/* ready-queue mini visual */
+.rq { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 7px; }
+.rq-pill {
+  padding: 2px 7px; border-radius: 20px;
+  font-size: 0.62rem; font-weight: 600;
+  background: var(--ready-d); color: var(--ready);
+  border: 1px solid rgba(255,171,0,.35);
+}
+.rq-empty { font-size: 0.67rem; color: var(--muted); }
+
+/* ── Log Panel ──────────────────────────────── */
+.log-panel { grid-row: 1; border-right: none; }
+.log-body  { flex: 1; overflow-y: auto; padding: 5px; display: flex; flex-direction: column; gap: 2px; }
+
+.log-e {
+  padding: 4px 8px;
+  background: var(--s2); border-radius: 4px;
+  font-size: 0.69rem; line-height: 1.45;
+  display: flex; gap: 6px;
+  border-left: 2px solid transparent;
+}
+.log-t { font-family: var(--mono); font-size: 0.63rem; color: var(--muted); white-space: nowrap; padding-top: 1px; min-width: 44px; }
+.log-tx { flex: 1; }
+.le-run   { border-left-color: var(--running); }
+.le-block { border-left-color: var(--blocked); }
+.le-ready { border-left-color: var(--ready); }
+.le-sys   { border-left-color: #ffd54f; }
+
+/* ── Timeline ────────────────────────────────── */
+.timeline {
+  grid-column: 1 / -1;
+  background: #03060b;
+  border-top: 1px solid var(--border);
+  padding: 9px 12px;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.tl-hd {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 0.61rem; font-weight: 700; letter-spacing: .07em;
+  color: var(--muted); text-transform: uppercase; flex-shrink: 0;
+}
+.leg { display: flex; gap: 10px; margin-left: auto; }
+.leg-i { display: flex; align-items: center; gap: 4px; font-size: 0.63rem; color: var(--muted2); font-weight: 400; text-transform: none; letter-spacing: 0; }
+.leg-dot { width: 9px; height: 9px; border-radius: 2px; }
+#tl { width: 100%; display: block; flex: 1; }
+
+/* ── Concept tip ─────────────────────────────── */
+#tip {
+  position: fixed; bottom: 219px; right: 12px;
+  background: var(--surface);
+  border: 1px solid rgba(68,138,255,.5);
+  border-radius: 9px;
+  padding: 9px 16px;
+  max-width: 226px; width: max-content;
+  text-align: center;
+  font-size: 0.75rem; line-height: 1.55;
+  pointer-events: none; z-index: 9;
+  opacity: 0; transition: opacity .4s;
+  box-shadow: 0 8px 30px rgba(0,0,0,.6);
+}
+#tip.show { opacity: 1; }
+#tip-title { font-weight: 700; color: var(--blocked); margin-bottom: 3px; font-size: 0.78rem; }
+
+
+/* ── Footer credits ──────────────────────────── */
+footer {
+  flex-shrink: 0; height: 24px;
+  background: var(--surface); border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-size: 0.66rem; color: var(--muted2); letter-spacing: .02em;
+  white-space: nowrap; overflow: hidden; padding: 0 12px;
+}
+footer b { color: var(--text); font-weight: 600; }
+footer .dot { color: var(--muted); }
+
+/* ── User manual (dialog) ────────────────────── */
+.btn.help { border-color: rgba(206,147,216,.4); color: var(--t1); }
+.btn.help:hover { background: var(--t1-d); }
+#manual {
+  width: min(760px, calc(100vw - 32px)); max-height: calc(100dvh - 48px);
+  margin: auto; padding: 0;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border2); border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.7);
+  overflow: hidden;
+}
+#manual[open] { display: flex; flex-direction: column; }
+#manual::backdrop { background: rgba(3,6,11,.72); backdrop-filter: blur(2px); }
+.man-hd { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.man-hd h2 { font-size: 0.95rem; flex: 1; }
+.man-lang { display: flex; gap: 2px; background: var(--s2); border: 1px solid var(--border2); border-radius: 5px; padding: 2px; }
+.man-lang button { background: none; border: 0; color: var(--muted2); font: 700 0.68rem var(--sans); padding: 3px 8px; border-radius: 3px; cursor: pointer; }
+.man-lang button.on { background: var(--blocked-d); color: var(--blocked); }
+.man-x { background: none; border: 0; color: var(--muted2); font-size: 1.2rem; cursor: pointer; line-height: 1; padding: 2px 6px; border-radius: 4px; }
+.man-x:hover { background: var(--s3); color: var(--text); }
+.man-body { overflow-y: auto; padding: 4px 18px 14px; font-size: 0.8rem; line-height: 1.6; color: var(--muted2); }
+.man-body h3 { font-size: 0.72rem; letter-spacing: .07em; text-transform: uppercase; color: var(--text); margin: 16px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+.man-body p { margin-bottom: 6px; }
+.man-body ul { margin: 0 0 6px 18px; }
+.man-body li { margin-bottom: 3px; }
+.man-body b { color: var(--text); }
+.man-body kbd { font-family: var(--mono); font-size: 0.72rem; background: var(--s3); border: 1px solid var(--border2); border-radius: 3px; padding: 0 4px; color: var(--text); }
+.man-body .st { font-weight: 700; }
+.man-body .st.r { color: var(--running); } .man-body .st.y { color: var(--ready); }
+.man-body .st.b { color: var(--blocked); } .man-body .st.s { color: var(--susp); }
+#manual[data-lang="en"] [lang="pt"], #manual[data-lang="pt"] [lang="en"] { display: none; }
+.man-ft { padding: 10px 16px; border-top: 1px solid var(--border); font-size: 0.7rem; color: var(--muted2); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-shrink: 0; }
+.man-ft b { color: var(--text); }
+
+/* Glow animation */
+@keyframes glow {
+  0%,100% { box-shadow: 0 0 20px color-mix(in srgb, var(--tc) 15%, transparent); }
+  50%     { box-shadow: 0 0 38px color-mix(in srgb, var(--tc) 38%, transparent); }
+}
+.win-sel { background: var(--s2); color: var(--text); border: 1px solid var(--border2); border-radius: 4px; font-size: 0.63rem; padding: 1px 3px; font-family: var(--sans); text-transform: none; letter-spacing: 0; }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════ HEADER ════════════════════ -->
+<header>
+  <div class="brand">
+    <div class="brand-icon">⚙️</div>
+    FreeRTOS Task Visualizer
+    <span class="brand-tag">v1.0.0</span>
+  </div>
+  <div class="sep"></div>
+  <div class="ctrl-bar">
+    <button class="btn go" id="btn-play" onclick="togglePlay()">▶ Play</button>
+    <button class="btn step" id="btn-step" onclick="stepTick()" title="Advance the simulation by exactly one tick (1 ms)">⏭ Tick</button>
+    <button class="btn rst" id="btn-reset" onclick="resetSim()">↺ Reset</button>
+    <button class="btn help" id="btn-help" onclick="openManual()" title="Open the user manual (?)">❓ Manual</button>
+    <div class="sep"></div>
+    <div class="spd">
+      Speed
+      <input type="range" id="spd-slider" min="1" max="20" value="6" oninput="setSpeed(+this.value)">
+      <span id="spd-val">6×</span>
+      <span id="spd-tps"></span>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════ MAIN GRID ══════════════════ -->
+<main>
+
+  <!-- ── LEFT: Task config ── -->
+  <div class="panel tasks-panel">
+    <div class="pnl-hd">Tasks</div>
+
+    <div id="task-list"></div>
+
+    <!-- Hint -->
+    <div class="hint-box">
+      <strong>Try it:</strong> drag the sliders, use <strong>⏭ Tick</strong> to step 1 ms at a time, or switch a task off with its toggle.
+      <div style="margin-top:8px"><strong>States:</strong></div>
+      <div class="hint-row"><span class="hdot" style="background:var(--running)"></span> RUNNING — using CPU now</div>
+      <div class="hint-row"><span class="hdot" style="background:var(--ready)"></span> READY — waiting for CPU</div>
+      <div class="hint-row"><span class="hdot" style="background:var(--blocked)"></span> BLOCKED — inside vTaskDelay()</div>
+      <div class="hint-row"><span class="hdot" style="background:var(--susp)"></span> SUSPENDED — task switched off</div>
+    </div>
+  </div>
+
+  <!-- ── CENTER: CPU ── -->
+  <div class="cpu-panel">
+    <div class="cpu-glow"></div>
+
+    <div class="cpu-top">
+      <div class="inst-logo-wrap" title="Universidade Politécnica de Tomar (UPTomar)">
+        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA9sAAAFRCAYAAABkPb5LAAAACXBIWXMAAAsSAAALEgHS3X78AAAgAElEQVR4nO3dy3XbyN73+18/a8/F501A6AjEHYHREVg7AsMRWI7A8OzMzI7AcAQtzd5ZQxFsKYINJXA2FQHPoFCHIAgQVUDhQvL7WYvLloRLEdf61/W33W4nAAAAAAAQzv/MnQAAAAAAAC4NwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgf1j7gQAwMxyj2XjkdKAy7SWtHFc9kXSw4hpAQAAEyPYns5KJuOF87SVyQzj8nyYOwG4WCudz/WVyy2tz6LQyUUq6Zvjsr+NmA4AwIwItqezlvT33IlAb1NnMCNJieOymaQi4L5juX/XNOB+AQAAgItBsA0sUyT3WpFc4YNt132nAfcLAAAAXAwGSAMAAAAAIDCCbQAAAAAAAiPYBgAAAAAgMIJtAAAAAAACI9gGAAAAACAwgm0AAAAAAAJj6i8A1+63uROAi5WL6wsAgKtFzTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGAOkAVi6SFJc/lv3Un6KyVJzmSJJ6/LTJJc5ztuJ0nNKLJPOVeV3LzJp9E2f/c5Ry9+L8pN7bndOcfmpK7S/X5Yg1vF5lMw5zLWcdK5l0tqUTnvdLUWk87mPAeAqEGwDGMta0sZhuaz81CWSHiTdOWzjtdxX03a6bNSeOa16KdMjmUyt676q6/W1kvTouOyD3AKVqFz2XtJtx7Lfyn+fynRkjmmpyx2WaTpekaRUJq03J9Z1Gfk7lrm2urZV9yzz3R/lV7jjen1l6n9cY5lj9tFh2bdyPxtNH3RFcjuPkvSufTqLyu+T8tNlyH0XyS+dj+XyRc/9DRFpf0xc72P7vHwUgTcAjIpgG8BYCkkfHJfNKv+Py5+7Mo5Vd5J+ah88Fh7rruWeTstu32W9DzoOGHzdO+7rTd2B9qpMz6ce6fhYflKZzH3uub7vcZbMOU3lFxg3ieV/XVV9KD8/JP0qt5U7rOd6fblsqy4q0+FzXG9lgi57XF0KxIZalfv64rHOTbl8osN0Rup3Hbnom85P5efPcv0pAtg+abXs8zKVuQ5cC/IAAJ7osw1gLH0ynA+S/lb/gOhOJth0qUkcyidISQbuK3VcritNtiCiT6BddStznnwDtTeHZarnLpMJbocG2hsNu67qPpXbe1R7E/Sx3ctc630DzxuZY5uFSlCLtUw6+wSF0vmkU+W6uY6bnIcWy9zHQ9IqmfvhL5ljO3aaAeAqEWwDmJsNFlKZTPVQNzJB0NiZx0e5BY/SsGA7lluQaJvdttnIZKyHBq5VXzr2WVc4LGPTl2p4oYA0PIA65WO5/fuRtt8mUbhz+UnjBbJrmeAzRCHHuaTzTuMG3IlMQU/I+/iTpikkAICrQ7B93d4lfZf0de6ElF4l/UumbyQug+u5vNe+P2EIt3KvDR7CtWb3Vv0DssRxuUztrQk2Gi/gHCMIihXmesjk1ud/iBtN2+81lmkCHNInhW+aHckEcKGDwqHjH9RFCp/OO41zvyUKf+6tO43fegAArg7B9vX6rv0gMBtJn+dMjEygHcvUFsaS/ih/h+vw1wjb/KLxm/hmMoVWLpIe21/JvXa3LfBPNF6gbX1S2NrdLMA2YoWpGe/ypulGpPYZKG9umcIGsFbobWYjbHMMscYLtK2PCl+YAQBXjWD7+jxL+l3Hg7hkmi/gtoF2NT25TNO+r3IPZoC6sZv3buUe/HyUf/CfOC73S81NtCP161f9XH5cm8lLbv0+XadzCtGcd4qBv6RpWlBYG51HYJhovEHMQkp0Hulcyb8A6l37+9in4DrVfOMQAMDFYTTy6/Gu7pFns/LfsUvPq5oC7So7PUmm88gUIRw7srYN0GL5XwOJxg+6UrnXoCbyC85ca5mylt+ncg/Onsrl6wFxJHMMu6aVutF+hOs2UzW3Xsu9+fiTzPfLG7axlrnu2qaAstM+TSFSv5r6Zx1+t5Xcpnvry4527+tVh8dyJXPsx+wGECKdkjmeY6bzQe7n61nmHsxrv4/K7XS1crnRfrYBAMBABNvX4VXu0yFlMpmcEANVdXnT6UDbKsrlUoXt14tlelP7dDRR+XvXjO3Y/XUlc30+yW2O40TuwXYstwz2q5qbMUdyD84+qz1gL2SeHw/qfi50BdtD1QPHSM2Bdey4va9qD7hsQU+mfYCa6vCcTDlPceq5/JPM+Sga/vagfbed0DXlbQUTbV7L9OQtf49lzlHoezlRuHSmMtdhpvDpXMn9vfdL7UFyIZP+F3UXqNu+8VOORQAAF4lm5JfvVSYTUHiss5F5aY/pXSZT5vMyT2UGUMPlstdrW21hIZP59mneHA9KkZsxBkpzrdVu23fquP6T3JqobtQ94N2NwjfdtwM5/q/2hW72k8hcL7/rcKBH11GVXc/bVuYYRTIFE7ZrS+q4/lA+ffcl8/zuKmDNZb6Pz73kwqfPr23ZlJ9YJi+XCT2Gh086n9WdzhfNm85nudVGZ3J7v7tsCwDQgWD78t3JZLgSz/USjTtAWSL3/pvSfmqWMQbSwjK8y62lw1Z+Qc4U09nkCjsNWCS3mvI3tQfKrkFv4ric5HbcQwbb9ppIdfq6KNSvSXDUY52sXO+r/Aoxh4g9lnUNuiRzTEOer0juNbuuLZukfTpDjd8RyS+drgXDW5nvFHKckSTwcpLbfRx7bA8A0IJg+zrcyjQbK+T3Qg6Zuan6U+79HCOZzO2/RZ/tS7eRe0sHn36y6x5p6SN1XM5loLTEcVtZy+9dm/L+kl/rklzdz4SQxzuWX6Gcr74jL2813QBskl9AnHhu+0XhWjL5pDOV37VXKNwxjz2WTeWXzq3Cjei9lntXksJju4W6C9NdCvsAAB0Itq+LDbpzudXoFArflMz2e3Nh+5dNMX0P5ueTkV5iX8JHhZsGrOvvKvfVdsxcA97ccbmqruA3VJ/VXw77alM4LvdF5hgkmqYFRF+u59M36LJCBbGu6XxXv+nd+qzTZOx0hho0Lx5xf7nDMlMVVALAxSLYvk4fZDKxicOyjzJ9OkNx2WckkxH4ofOY5gbDvco/gO7qPzw1n9rO5MTfXEeKPjU4V+yYjp+Sdp4flxYmITLp2YB1c49lP8gch//KBKqZ9n3Bl8K1AKNvkPeiMK2YIsfl+qazUJjuTWMWRknmvgzx3owcl/sm//u4a1RyadkFUABwFgi2r9eNTAYzU/cLNVGYjNh3dddUxeUyNBm/Lkusqe4jc1zuVu0BsWvLj/TE3+bOJIfYfz5g3UL9CmNuZVrS/JTpurIt0/GgZQXfbfIB64Zoru/63B6yrxDpdL0+507n3NdcNPP+AeDsEWxfjr6l/Z9kMminMh8h+qC9qbtPayLpb/WrzX7TOP3LAR+F3Pu/Jg2/i+QWsDzpdHPhKaY8G1OI2ssQ/WZvZM7HD5ngu9D0Tc5jj2WHFFqN2Tc+5L6KAPt3vT+GpPMSChCjuRMAAOeOYPsy2OmS+k7hcqfugDvTsGa7ScffH9Q99+cpqcINSrMEPpm8aKxEoJfMcblPOr7nhk73dSlCBCovMtN0hWTHvXhR+CnOQrj24DC0uQsvogDbAADMiGD7/L1rH8imA7bjEnD33f6zTjdvTGVqjvqy0x9lGn9+8Kn4ZPKiwPuOHZejJUGzXO41s0nHz03eNKy58DXJdDgvdii3MtMQXnqhB+blMnYDAGDB/jF3AjBYqn0Jelb+3PcFbQPuWM3BXi7TfNV3SpCk42/fPLdXl1b+/yCT/mvKpESBtzdFf8ZLt5FbS40H7QO2RG5dKNJ+SWr0R8BtVS3p2shknl2pws9s8EVhp6QaKtJ0c39fgyHdBUJ0NXiWW7eSrxrnnitG2CYAXBWC7fP2rONM3oNMjUtfNuBuG5jlQX7B9i+1v7DvNazpuGSOQVb5eat93+9z55rRigPucyX3/ow0O22Xya3gyw6Ulst9uq+sb6IabLWswHgshczxfSj/vVe4QRh/yIyuXQTaXl3usWyk/umIe653jl7l9pxbq//I6VMObvYiWrsAwCLRjPy8JQ2/CzFV153aa2oK+fXdbttOpDBBQ1Mf11xhpyubS+G43K3C1W779EO9hiBtiMxxuUQmY+4S/LnWoLreo5HjcpfCTs8WS/pNpmb/q8zzYkhT83RowgIZEuCFqIl1PYbxgH0MWddyLSiMBuxjyLq+4gn3BQDwQLB9vr6rPRh70PA+il/UHniljtt4VntA9qjhc2ifmkosxDGYm08wmwbaZ+KxbB5on5fKNTD+JPfz57pN12AidlzuUuUyx/ReJtj8XaaP9y/5DTg59mBprmMAxD2379Oi5RTXZ9aQQoEQNcau6RxyXuMB61q543JzTxEGAGhBsH2e3nU6013IL2hqk6m5tiOXW+avLY2phmfsXnU6QClO7P9c5B7LftLwmhTfprX5wP1duq3cB+xz6ZrxS+5BdO643BJH1J5TIfPcS2TuJ9fB1W40bk2ma3D4Uf1qqJMe6zQZO533Gl5IK7mn80b97pG1wowbMvbxBACMjGD7PG3Unel+1PCRuW/UHrB2BbJvau7rttbwAdHe5ZYB2ui8a7df5Fe79qj+Ga5Ifs36L6GZ/hRCFvikHsvmjsvdKkygFWl5mf2VhhcmZHI/h9HAfZ2Seyybem57pXDTJuYey/bZ57mkM+2xTpPcY9kQx2al5d3HAHDWCLbPk2vtVqJhc2NLpsY0bvj9o04HslnL70MEH/dy78987oN4ZR7Lukzf1mRdrudTY5R57uNavWj4PahyG4Xnfl0LajYa1gw10TLnnb6XGSzyUcMC4SW0kPEZpOuL/JowbxRu9obcY9lv8kvng8INalfIvWn+B/kFz4n8Z+xos5V7weY3DbuP72Xu41AFGgAAEWyfqx9yr426l3umok3a8LutTmcAs4bfxRqeWfostwzdqlzu3KcA862dv5PJSKbqDrpX5XK5/I5TW6sFNAsRrPXZhus6N9pP+efjvlzvZ7mNxHP9sSXlvx9lgoiN+gXdS+gP6xN0Seb+dCn8yBR2OrSx0vkg894LKfNY9pvcAu4HDZ9hoy7zWDaXf6FXXK73l8K1dAEAlAi2z9dPub0UtzIv0yEB9we11243eVVzLVw6IA2SCbQzh+VsoB1iwJ+52dGTfdzIZA7/q/38wvVPXv79m/z7QFLz4edRft0B6voWbmRyL6i5kZkuzwY/TQU1tln2Rub+/kuHhWcftJzRzSMdpu1Gpsb3PzLf8UFuaY3lfv/lronryec5cCNzfnLt+59ba5nvXyj8vONSuHRG5e9yhQ+0Jb/7QzLPykL72QOsSOOm81Hu7+9Tx9NaaX9dFzL3ffVeudXyWqkAwNlinu3zZkvQs47lbMCdq38Amuo44LZNyevBWlN6Yg2r1b7GQNvayGSc+tTSf1C4ppeSqbWiVtvfRv0z4mnP9bYy181fHut81GET2DeZe8q1QOZByyiMSU78zX7HHzLPr5fyU+1yYgMS1+fI0NZDLnKZ7gQ+93Po+99FrvNIpy3I9BlD5Fbha65dPMgExa7qx/Nd5vu6vkPuxXMeAIKgZvv8/ZRbZtwG3H0Htmqrtcodf5f03O+7pH/JLdBey2SaLynQlsy5u9f8g729iSaGfWXqd/7eNSzTO3SgxFv5tXxIBuwrpMRxuRuZZ9sXmaDLfr7I7zkyVb/uRPM/B1wsocDFxUbDWp1MJZf054D1b+RXWPtJDJQGAEEQbF+Gb2qfpqvKBm3fe+6nKQOV135+0/F0JSv1a674KlNA4BJs2P6j595Hu83cA9fYEeDPfcC5uXSNcdBmo+HH/EHT1LxKy+i7fa9pnwNvmm7AwELnEci+SPo6dyIc2HfiOXjQ8BlGfCQT7gsALhbB9uX4JBNsugzmk0r6Q/4l+k2Zkrzj57b1uvwpE2jXA/cmqUxT2RDzry5ZJlPLP3XN1pvczwXapT3WyQLsN8S4DT7mDl7iCfflOg1hSJnCB11vGlZz2mSj8Ol8H2GbLzLdlEIbo7Ah0XQB99z3MQBcBILty2Knfkocls1lAnOfDNatjoP5Fx0Gf00Bmc9L+02mIOBB3TV6kcz3GDpv9zl51LSB05P2zfMxTCG/bhy/5Dfd1ylb+d/vfTxp/hqxVNMEJO+arxAqUbhzOWarlUThzoU93kWg7VVlMgF3qILMzxrvukjUv3Waq2fNfx8DwEUg2L48NzL9uB/l1qz8QdI/5T4XcFPg/NLyf8tlztF3mQxEJLdRfZNyX1MPqrMELzKB02eN19/QFnrQdDwsn7692Qj7f5A5r6ELa561nOvFDgz3h/qPUdHlWeZZNWch1IOGt3R51fiFaYmGB7JTtK7JNLwg813musuGJ+ekVH7vbVdvMucq1jiFGgBwdQi2L9dHuffve5F5ubpkTuOG3+Ut/29bvupN+yA77VhW2gfjdm7fa5bJHI/PChNU2Caaf8i90AN+crkVkDxrvOOfywRY/9Kw68ZeL//UfraDJcllgv/fZZr0hihgeJK5P2LNX6ggmULVSOYZ6hPM2qBqrWmCqkwmnb/kl85qIewUBRt9CzJ9C4tDqL63fY9rVf25nw1PGgDA+m23282dhmsRy2/qjpBeZYLu3HH5SKY2IlHzQEO/1X5OZILfNx2PWJ6quZn3k8xL3XXQqFW5rS+Oy4f2rGn7gvaxkskoxuW/9uemQok3mUy2/eQaJ5OYyG0+40L+mTzXbec6/d1ct1MoTEY0Vve1lGu6TLud5mqt/XUT6fDef5UJLguZTH6ufsFPLLf7qNA4mf7qPRJpf97rLWTslGDS/rvm6hdgJwpznXax5zHW/lzae9/e7/Z7ND137bpdCg07NyuZQpC1jtNZnYpt7nRKJp2xTBoj7e8Jm85C+3TWr41I7k2x0/5JPBDr8PkfaZz7GADgiGB7OrHmC7atZ5mXeu6xjs2Y2s+NTE1W9QUdy3y3poD0UaaW/VX7zGQu90zrSvu5e+esyT6HYBsAAADAQvxj7gRgUh+0D4pTuQXdtpbB9jWNdBwoF7V/q1L1G9V0KUE2AAAAAHijz/Z1skF3IRPMdg2kVlXIL9j2baIWyzT9+69M83MCbQAAAABnh2D7ut1K+iET2D7K9C/zCbxDWcvUnBcyhQCfZkgDAAAAAARDM3JYH8vPT5nBy3KNN3hKdSCfezUPwgYAAAAAZ4tgG01s4G09az/y6otMM3KXINyO/Gv/tR+CawAAAAAXjdHIpxNr/tHI0R+jkQMAAABwRs02fNg5OvOGv32TCUjrf4vKT9t8zwAAAABwcQi20eZNh/22u5qNfyuXTU8sY5uTx+Xnw5AEAgAAAMBSEWyj6lVm2q1HNU/jNZStFc8rv7uvfKj5BgAAAHARCLanU8ydgBZvMtNujRVgd3ksP9I+6F7i1F/F3AkAZrbS/l7tci9TuAYAAHC1CLanU8ydgJpnmSbf+bzJOGAD74fKZym13cXcCQBm9iC3rh9fRaANAABAsH2FfskE2YXHOvW+1g867MMdl/+uG9bdlP++yAT2LvvdlmlMJSXlv0wXhiVIyo+LrPxcgpXMfd/lSft7HmFs1PxsbVJ/NgMAgBkRbE/rVdLdTPt+lgkSCsflV+Xy9zquzWrbxqrl918q/3+Tqb3O5JYpzMrPg0zQPVdNNxnY85bKDOLn4rcTf4vkPrBf7rjcOXBpZfIu94IIuFvL/Zprewbj8uRyuy6+6/TApQCAERFsT2uOppVvMhng3HH5WCZj/fHE9urfIy7/bXrx14PUW5ng+4v2/cWzhm3W2eVSHQbvU5nj3KUjbnur/bl5Ec1+cZpLrTb9tAHMIdY+H7JU6dwJADAPgu1pvWja6a58SrTjctmu9OUNv4tq/y86lrduJf0o97spP6cy61uZTH9WfqZsJTBHzbZrTWwIdqq36oB1gGQK67pqtb/rsmryAZyPWNO+L/tI504AgHn8z9wJuDLFRPt5lfRPuT3c1zKZ5L/lVhCQt2yj6f+S+c5vHdu8kXlRFnKrQXsp9/PdYdkQ3nX5NXa3MqPA/yVzHtI5E4NFSTv+/uywDAAAwNUh2J7WFLWjf8oEoi77SiX9W3617fVaz5UOa5ibBvJxrSm9kanptsF0l1SmUKErmB/q2vpr32pf+OE6MBPGs5Zp9fGi6ZtKJjo9OOG7TPNxAAAA1BBsTysfcdvvkv4lt5rhSCbj7tvs6knt/bXbfpb8R2S+kykE8KnlfvLch498xG0v2a3MeUhmTsc1sgF2IXMOvmiewRXTjr/TTxsAAKAFwfb0XkfY5ptMkOtSg3wvE6D2ybg3bT+u/fxBxyPivqhf7fOPcp9dI+xuZb7XWM3Kr61mu+6nCLin0BRgzznlXdKxf/ppAwAAnECwPb088PZe5d5sPJHpk9tn+qw3NddQNzUhjRt+13fu3Y8yx8xlSptU0uee+zklH2Gb5+anaFI+lrWWE2BXpSf+Rj9tAACADgTb08sDbutVJrB1acaZyARMfWUNv4vUHBg0BeCZTFP3Pu7kHnBnChtwv4pmslY2dwIu1ErLCbCte7WniX7aAAAADpj6a3qhplWaMtB+V3PNdFuGu+n323IbfafnsAF3rO7vnJX/DvnO1jlMg/Uu96bu9QHtfNzJXEtZz/UvQarrqNE9NV4C/bSnFc+dAAAA0A/B9jyeZJpH9zVloC21z3/dliG/kcmQ1wPVTblOn2bs0jwB9zkE231GqY7KdRL5jUaf6LqD7WsQq/2aoJ82gKXJ1P+5tJF7AfQfPfcB4IoRbM/jUcOC7VRugfZaw4PNNzXX5K11uulrouNAdSsTbA9J053Mi9WlGWtW7q9vTe6bLndwtELm+GQyx+iH43p2ADxqNi9XofZMZT5dMgDASVF++vB5l+U99wHgitFnex5Da0tdpsRaKcyLIemZho8ytad1mczgSkN8lFtT3ljDpks6h1rtEDaSvnosz0Bpl62QeXY0fQAAAOCIYHseWw2bF/qDuqdielT/5trWLzVnsFeSPjmsn7T8/kH9B0uzvqm76XTfEdCtbOD652Qj9+nZ4hHTAQAAAFwEmpHPJ9PwpuRZy98e5NcPt8mb2muvXWrW7XJN/b1fZNLv2nS5TSZTy9rUDCzRsFrtV11uE/I2udwKUYaKtO8z3ibXsKaB6CeSuafaWi/kMvfF1N0I1tqnrUmhfY381FYy13JT2gqZ43WOz5JIp+/TrfbfbYzrwV6HUcPfcl1GS4uVzHeMG/5WaHnXzqlzYq+HfML0XKJI5/l+tNdxfdaYrfbvDV9Ruc2o4W92m2O/i2KZ7xbye02t6dwU2l9HGBnB9nweZQLavlP+3Kp5ZORVw+982al9mh5iK7kH2zflsk3p2cg8AIYEd7ct219peK320PXPUTHittcyBSCnppSqsqPWv8ncK5mW81LLHZd70GGaEzW39nCZ0s5qG6zQepH7/WlF5Tou58aelyftz8tY7isfn1Y6TzLnKFN3Rix32F7bMU3kPsDgW5mervPXxO6nS59zX+d7n1qv2h/zIfepfb8kHfu31+Evmed/UfnbWu7P79gncQHdy3xHlwL3N5nvk2mesTJi7a8J1/vwl4YNWnZt5n4/Pqr7PVTo+Dlk79cHdV8bPs/ARN3j7VSfARuFzR+stX8n9v1eicI8t3OHbRQN+3J9lv7huA8Msdvt+Mz3edgNt65tMwuwzftde5pTz21td7vdqmVbq91u9xIgvdEu7DHY7oad11AfV3mg/bme29Rjm3GZvhDy3fH1Hvq77Ry25SoekIa+fK6F1W74vVLsjr/n0E9SbjeEbHf8fPA9l0VtnfWu/zVd7PyvYdfrZshzIPR92ueaeNiZZ28fm93+PRN7rBfyunX5DLl2trvDd7PrdtIZ0mrlu/7P7Kk+Pt8x9L6XcN/5HIPqOn3v12LXfk3Eu/7P/r7XefUz5J243ZljYreVOq6Xd6Spz7m537mfm77XDB+PD32255VpeN/lrPL/SMObAX9W+8BgPrXalq3dbrKVKTV/9dxmXVr5/72GHwfLVd4AACAASURBVINrrNWWwg58ZlsX/K3hXRqsD5L+res9PyHdy5SGD71XbmXOcYhzspYp5f+p/i1+6j5J+o/aW/u4DNZYTUsiUwvQ95q+lbmG73uuH9pY9+nfMsfJpdXGqlz2h/qPM/LFY39zSWTOfd/jfCPpL00zlkiqYWm17DM7GbidSzPmfbfRePeB3W6m/vfrrcy9Ws9vJDLp7/vs/6Zh98Zaw96JNzLHZEgaQkhknhNDx2xCQATb89pqeCb1rrKNdOC2Puv0g8KlqVDbem0P/xAB9yeZgoaVhj/o3nWdwdxK7k0qu5qA2czzlwHpOeWLTFC25Iz1kqUK/zL+omH3XiJzzQwZZ+GUbxrWVC6SSeNPhTlumZr7IU4p0rj36QeZzGt0Yhn7rAgRcNxpuQF3ouHTcFqfNN47aiVT2P6ta0FPP0XAbU3xfszldx+4NsFeyzy7hhbS3ugwjYnC3B+f1K8rzbpMT4hn+yeFDbgLx+VimULcUM8ZBESwPb+Nhtduf5F5WA15AHYF2pH6v4BvdLogIETAnSrMCOx9+lRego3cj92pF7PNSIwVNFlLzlgv2UbhM9JW30xGonBB7ClD7ut7hQ1wbjRvDYhtRTD2fSqdPu554DRUC5+XIlH4DPAXjTMF46OGDdx6CgH3ct+Prs/GEC0HrRuZezV0gJjKL18QMtC2PinctV44LheisgkjIdieX4jaban/w+pdZoCErGO5rr936coc2ID7V8/tf9Lw2pFrrNW2D2jXF+i7TtcQ5pomA69yP21dHnAs0Xi1KdYn+TWRnrIkPmv4Xe64bqrwhQEfNM8AXbb2copmho9qz8hvNM6zIlQXhBAijfdOCX3+NgrXpPnUPqKR97FkuaZ9P+aBtxn6/RG6Flg63XWxSaZxnoVTP4cy0XR8sQi2l2Ej9zmOQ3rVvlTvlHuFeQlnHX/fygQEXwPsq49U11GrHcuc00z+fZROBbdjZZ5P+aDh3SeuQST/TP+7TJ/mZ/k9nzK51SxEmq4k/l3DCmbGysQkI233lEdNlxHMWn6/1vgFP0uQ6TwywLH8z8eb9s8H19Z5c7fomFOq6d+Pd1r++3GM+yNxXC7V9OdkLOfwnLlaTP21DFuZkri/Jtznd7k9hEM2TbEP/q79brSfRmaqB+GrzrdW+4Ok3UT7Slt+3yfzbKctKWSatK5lArB7+QUDdmCUwnP/1ySV+8v4qVy+3l0gkrlHupqZnpryr8qn60KVnWbKFoytZK6dUwWCWY/9dHnX4bzCa5mgxec7TT1QWqJ+BadvOp6TNZb5zm3f167TpM+z1j4vqgWiscavje0rVr+0Penw3lvJ/5noK/NY9ruan7ex3ApcbYuO3GOf5y6Sf/edc3k/Vp/HfZ6BTd60n2Pejifjkxe8lTlWxYllVurXv/tVhwW3fdKHazP3cOh8Dj75bnz5zm8qjjHSFHvsP931nw5mrDRN9Vmaza49rY8e26lPkdH08Z1WJOvYXuqxrVDnxfWaikfYZvUTeWw/cdiey5SFXdPn+Xxna7M7PY2XyvTnDeu2redzXVjbXftx6jN1TNc5dU1j3rEd7fyn1ckd0rfeNX/n9MTyPupTXjVd3z7Pnyrfe8nn03QdnlKdvqzt2u7zLmw7D9Xtutju3J4/Lufi0WE7U318zlPffTTdH21c3o++10LWsb3UY1vWy645Lxly+qzqx2c6q92u+13m+51fdqffP/Gu37RleeB0Nm1/U24nLf9fnXLX5Z7mM/AzewL4HHyi3XiBZbFzy0hXP+mIaTmVqWg6LtlIadntTgeRc36W5GXXfs4ij+1sd+6FPeud3/1w6pryuZZDnZfYYVvajR9su947Phng3GF7pwIk38IZ3+8d7/YZipcTy/lcFzYtLtevy/GxujLWrmnMO7aTeKRpt+vOoDc9B6rXWtSynOv1uNv5vSt8tmv53ks+x8JH4rhd32fibtcdbBeO2+m6Tu1n5ZhGnzzAmJ/c8fvvem7f51qY6/1477Gd3e50fsD3uqqKO7bpUtBrhbrudzv3Z+FqdxjIusg7tpl6bs9Kd6fP0Wpnjmfk+N34DPjQZ3tZCoXvX/MmM9J4JL+mYrHGG7X4Vn79JwuZ5o+/q/8Aam3etPw+TXN7lzn+bf3ZfZrCpnKfZuRFfudm6ia558L1uPg0qUsH7DeS34jHifybnOYyTRq/K2z3kFhu16/PsZxqRH2fNP2Sf3/yolznj3L9omU53wH0XMfRSDRsRouQfL7jk9zfzS8K289/LbcmyW9yv49cB329luf1Ut6PyYm/+Y5V43Jfpp7b/K7u53zmsb1TA/K6XveSufZdn5123KE52UGPU50+R/Y+LcZPEgi2l2cj8/INZSX/zNxa44/y/EH+/Si3Cj+SqU9m7hrZQfROZQBcMxM+GTbLZ/DAa8m8+biXW/+5J/m9dHN1D4oUt/ze5zz90rBnUapw/bV/yS8j7DpoVNQrNX4iufcpfFe/voxWrvYM56k+3nU+x9saku6QYo9lE89tP8oMShaC673o+9zOHJaJPbd5rpbyfow9t93mVEFale+9mzkss5X7tX8q3+vzDnqQXx7xReErhXykuq7xEM4CwfYyJQo3OvmNpB8yL2iXoNsOiDbFyIY+cxHeyzzgQw6G81X+L4Rr8qfMC7roWM71nPStYXQNtuKe279kp0r3q/oEtF33TlvNQeyxjyUNWph5Lu/6bIk8t9tH7LHsRuMVQPqmw1eueWb2qIsdl/ulfsc61H0ROy6Xe263UHdhU+S5zXPl+n7Mem5/6vej6/588lbPci/sDZFnix2Xs4PU+ZrrvXXOA/1eNILtZdoqfC3dR5mH2antrjTtPJCSmWM3OfH3lczD7i+FLQB4Eg+lJu8yGcDf5Vai6xrMSf1fkq4vuxtdTwbOVey43E+ZEe19Pi6ZyKb9u14zdkTapcjnTsAAPvfpmK2aIsflhpz7vOd6oazk/q7Ke+6j73p1roHgv+X/fOg6BksdRT4kn/su77mPqd+PYzyTfbYZoiAwclyu77PwRfMU+pGnXSiC7eV6kelrHdKNTND6qOOHzRyBttUWcCcyBQQ+/TtdvLbs71o9y9Ri/0vmukjkXsrs00Uh91i2yudFHPXcx6Waqj+wD9e+cvmYifC0hNrSIaYoFHPhmo4haZi7gGaKY73Vcvqno90lvh+LANuom7orn+s7aMizpBiwbl9zP/vQgnm2ly1Tv/mLu3wsP39qP4hFrnnnCfxZ/pvJ1IZlGmde0XddXj/tV/n3VXxRmGPgk7Hs65LO1dSWNvenz/VSjJWIHoq5EzCRUH2BhzrnYNvHkLQOfS7GA9dHt2iCffB+HE8xYN1c07feOKdn31Uh2F6+B5nS0U8jbPuL9qNMjxHY+vop833HChDe5dYH+dxsNV8toGvJ/VIy8ZjXEmvarwHHHZhe5LjcVC1n1lpWi6E5xHMnANeHYPs8JOW/YwTcN5pmMDRXYwfalPwBuDZLa+EAYK+YaD8Uuvkhv4ggCLbPR1L+O0bAfekItOc3RXNz9PfHSNvlnluGZ13HgFQIr083JVcrXXYzaNfvNtW9yfPY73qjJQCCINg+L0n5LwG3OwLtcbke1yW1nrgm7xp/ZGQfhcey1MJM7xIKxc7puok0X7cm1/3eiYCjr6XlOy65YMPVVOckmmg/OAOMRn5+EpmpmdCNQHt8Pi/vqOc+Yo9lyUwccr32pwpQCo9lLyHwOzc3WkawGg9Yd+7rxud9MyStQ2tDC49lo4H7Qreo53o+1xDvRz9D7s8oVCJw/gi2z1Mi6evciVi4V5mHHYH2uHyOb9xzH0uZtugcFY7LxSOmoc51MKAPWkbgdwlyj2Xvx0qE3NMxJJMbD1g3hK1MQa+LuOc+QhUouN6LcaD9XZvcY9m45z54P/pznTav7322Et12UEGwfb42MvMiu77Ur8kvmRcXpbjj28o9w9Y3E++63jWMeO4bfLpmrhLP7Q7hk+EbM/C7JoXHsslIaZDc03Gjfuc+0jIyuWPfd33Xq3NNJ/dhf66BXd9jnAROxzXwue77FPhyv+AAwfZ5e5QpeeMhuvdV++nMMI1Hx+U+yr9pVSz3zHPuue2lyD2W9X2Ju56bG4UZBClSd+Yk99jexmF7p0Sav1nxEuQey37Q8JrMtvV90tHnehxrIC9fPvdd6rntlcIF2z7P7hD3URRgG+cmd1yuz/txrct/P47BZ6yZPs+UtMc6uGAE2+evkHng/jlzOub2KumfMplzTMs1w+a77Ep+59Nn2+fqXn6Z3kLuhXGp57brEplMTFeBgM95upGU9UzPQ5mepQRgcyrkVyhrC3J9rWWOeds59knHB/mdu1jSF4/lx+RzjT/I71hnCjfgpE86M/Uv+FrJPF/+o+sLuDOPZX3fjz7b9ln20vkc52/yuz9TSbdeqcHFI9i+HA8y0/e4Num9JH+KgdDmlMv9uruTedF1ZdpW5XZd5wd+1nmff9cm8DcyxyX22LZrgUWfbUsmuM4l/ZRbTUAh6clj+x9lzm3kuHxSpueH9s2R6fvtV3BlrwXXlhRrmcz8v2Xu2VPNwDOPdPyQWy1RrGUVthVyL1Rwve9scPWxZ5qabOU+4KodlTzy2L6thX+RCVqk6yv8epH7tWCPMe/HcRXy63aWy+29mGp/nQP/P4Lty5LLvAi/z5uMydja7AfRbHxuqceyH2Vedhsdv8Di8veF3DMSvvtfIp+M0I2kv2WOUS5zvPJyG3nD8o9yLwyx287VHqSuyr/Z8/SXDpsy3qk7Q+7bAuVOplYs03Ht/rqWnp+19PTt/3tpMvkVxt7InFvbOiCu/C0qf07Lv/9bx1NSJifS4TPWyDeZ85ro8Lzb6zCXuWaXNr2gb+HG39pf39X7bi1znAuNM+1n6rFs9T6MW5aJZM5Vpv39WK3pSzz2dyl8roUP4v04hcxjWXt/Pqr5/kxkzgmBNhoxz/ZlSmUeJBuFLQVfineZzF82czqwl8m8cFz7j93INPkM0ezzWeffHy2T/7G4LT/VY95UWr+VuV/+8tj2h9p232QyGK4BzYNO12DlMrXbvs+nT+oXcCTieSH5XweSydT/6LGvjzLXTL0gdCvzbvLJmN7KBG3nJJM53j5BUd/re4hCpnWYz/Onns5XuX/PG13f/ZiJ9+PSZPK/Pz/qMvPUGBk125erkCmB+0OXM0rzu0ytfaTrelGfi0TTj47/rsuotXzRuPfpo9ybiza5lV/NYeK4zFTXywddX1/RJo/ya8I/VNLy+42uo8vTuTSZTjVsoFWfgEW6jGe2r0TzvB+Tifd5Ts7l/sSZI9i+fLlM06M/NG0mK6Q37YPsVDQZX6pC07/YY13O9ZCOvP0HTTdzga29OmUrc/6myoAmE+1n6RJNdx20ZWa3uo7zkes8unVtZQLgqe7FPiNvn7tC01/z9/Kb9u/a5GJwYUyAYPt65DIP3t9lHi7nMD/3s6TPIsg+J48y52xs7zLzzF/SoC+5htU+d7HB7VSBlkvtle0PPMXz6Bpr05pMeR3cqn0k31zjPCuWlnlOFf6+flX481fIXBdTtTi4xvvRvh/Hft69l/vJR97PJXhQ+PvzXct7DmFGBNvXp5B5uKxkHsZLq+1+k3lI/S7z4s/mTAx6yWQGrhsr0/am5Y0+HEqicYOgraaZKvBJ7rU4mcbP5L/pOmpSXdmAe8znv83wnyoQyxQ24P6sZT4XEoXL0L9qvBY9LzLPh7G7nv2p652mM9O4zzv7fsxG2v4lShTu/nzXZbW4QwAE29ctkyld/l+ZWsJfmqcf3bOkrzIBWiRTGFDMkA6EYzNtoYO679rP5XuppgiGH2S6loQO7J/L7d7LL7Mx1vVSHefhkq+ZPmzT4TFq2n5pPx1Yl0zDp620LV1c9jeXROY9N+RYP2v8jLwtiPms8PmBXzIF6dfeV9Y+70J3MbiG9+NYEg2/P21BGMcfBwi2IZmX66PMwyaSeRl+lsn4hi7hfpOpTfkuk8H6TfvpLHhAXRY7CvbvMue7b8bN9tn/XdfTncAGw2PWMOUyGbOh4zm8y2Si/ylzL+c9t1O9XoZ2dXnSYRcUtMtkjtNnDSt8qd6nifwKTHPtgw/f58QvmfQvsUa7biPzPX1r0d5kzk+s6Z5/mcJdF7a1WiIK0q2tzLOJ9+NyDLk/v4qCDrT4bbfbzZ0GnIeo9pFMU/Sm/nhbHT5w8tq/cJM6Lldo2TU6VWuZDONa+2upOgfrm8z3KbSfNzrEyytW+7ywdenAv1uZwmQsI5kayFj7e86ODF4/Xo8D9rnS/tysy58jHZ6fV5n72+4v17iZi7X282o3pee9sn+bllzuGc5YbtdFIf97LJHbIFBd2441XhqbRDq+DuqjTdvr4EX7Y14E2Ldlr3f7nLDn3J7votzno47PdST3LgNp/yQOttL+e0Zqvq9zme/YdI8lcru+coV591afD3H5u2qapX3h4FjXxRgSuQ/Wlo6WCmOu92Okce4Z12VzuV+jsaZ5Hrrcn/YcNBX0xQqTTtftSBQsLxbBNgAAAAAAgdGMHAAAAACAwAi2AQAAAAAIjGAbAAAAAIDACLYBAAAAAAiMYBsAAAAAgMAItgEAAAAACIxgGwAAAACAwAi2AQAAAAAIjGAbAAAAAIDACLYBAAAAAAiMYBsAAAAAgMAItgEAAAAACOwfcycAJ0XlpyqfPBUAAAAAAC8E28uyknQvKZH04cRyrzJB90ZSMXaiAAAAAAB+ftvtdnOnASbIfig/N57rPssE50XYJAEAAAAA+iLYnt+9pEz+QXbdd0np0MQAAAAAAIYj2J5XIulnwO09ldvcBtwm0CSt/ZyJ1hVW2vHzHCKZZ0NVLsaAaJPocLyMQuYav3aRjq+jTNz7AAA0ItieTyrp2wjbfZW0HmG7mN5Gfucyl/Qi6XGU1ByqPzj+EIGbVT82v82SikOxpL9rv5ujNUxe+/lB5prtspa5H/qs20euw3EznmWO4bWLdXwdce8DANCCAdLmkWicQFuS7mRqGpKRto/prHV6oLw6u+ybzPnPA6dnbnYAwWzmdKC/+vW8clxvNWBdzCuSOVdjFYwAALBYzLM9vUjHNTShfZIJSnCdbmVqn5KZ0xHCSuZ7PEr6r8J2uwAwjkj7lgf/Ee8jAMCVomZ7ehsNHwzNRSaT4aH/9uV4U3vfyLWOr6uNTO122zrnYC0C7BC2Mk2hq4oZ0nEu6rWw1MoaTddR0zsmk1+rHAAALhLB9rQiSR8n2teNTM1COtH+ML5Mp8/ng6QflZ/tNfAwXpJwJl5En2Mf3DPNuI4AAPBAM/JppRPvL5l4f5jXRtKftd8xWB4AAAAwA2q2pzV1v7VbmWCLJpDX41HSl8rP0YllI5laqvoyj+p/zcS1n1/U3ZVhrcPBrv5fSf+n8re++7ADqkWV321lvl/RkaZ6+uJaGrfaj/7uKirTU93OqdHjVzr8/tvK/ny3Jfmfm6bjZ9fLO9adQ1z7Oa/8P5HfdRDpeOqvouH31XPSpn4e62mr7jP2TGd92zadKn9ffedsdHzO6su47DOu/Wyvo+p9XB+8Lqqtt21Yrs+xdFkHAID57HY7PtN81rt5pB5p5LOsT97jXMa1dV4alol2u122O63Y7Xb3J/ZTF5e/L2q/zxzSvK2t8/90pK1t3/az2pljdcpjuVzXsayfg7qm41Sn3W6XdGxj3bL/qnzAtk6ds/pnteu+PrY7c4y7jmHfNHQdi6Z169eeduZY1K+vqqRlf/Xrx957Tcc+6kj7Q235ovZ3l+O92TUf6/pxsdf1Y8M2qscr2plnwyn5rvn8tG23616pb7t+jLcN+6p/6scpc1iHDx8+fPjwme1DM/LpzNWcl2bE1yWp/dxUk/UiM2L9KbeS/pL/NFv1kfbrta91iQ4HdnuT9H8991m1kqk17Jpa72O5XFvaEpkR3bsGebLH6VQf341OD/J2K1OTWE9LUfvZjszeta28YVuu1uV+u66PG5ljnPXczxiK2s8PMsfi1ICUP+XX4uhR0nvtd0nHOvVrI638316vXcf7i9ym8lvJpPHU2CD2GXDXsa0PMvfAWP3Xs9rPNzp9LG1Li1PbAABgUQi2pxPNtF/mor0OK5lMfD3TXm1WHKk5+HiTGWG4Psqwyu35ZLYzHQYjNzodzCS1n+vBuq9Mx0HEk6TvMv3Z3yq/t3PS192rOaB9lzlG9WBLOt18u9qs/1nSa8Mytzo+FkXt57tautrO2Y36jQ9hA7Wm4PRVzelechPeH9p/F3uNN507n2tu27B8cmL5WObcWu86vOZyHV+vv2Su1186TO9dw77r1uouIMp0fI5fZe6PpmN06toeopD5jlXJieXvdZjuV7kVQAAAMBuCbeB8JDKZy/rnRWYO6nptbj1jn+o4k/1V+/6UsaTfdRxUpXIvtLH9PavagvVIh4GBTW8u6bfy80fDer/VPnn5+1jHNXp/yGTS0zIdax1+v486bv1RD2jeZY7TSvu+27/LBEQ2AC8a0ln1S9L/luuvJf1Tx0GNaw3rU2VbcZmWt9oyPrW11kaHgaG0T/e6/Pwm6V+V/WU99jOld5lrINL+3NUDPDu2hausYf22453Uft7U/lYNtN9lrotE5npNZNJdPbdfdPperBYufJb57n/IXL9Fub36Pn+X+f4P2h+jz+U2nuQ+vkGs/T1ZLwT6rsN7Ni5/n9WW+6D2gun6c2RowRwAAKMj2AbOx61MZrT+aWoO+i6Toa0ORFSv9f6u4wxrIRM41GunE490prWf79QczNQzz48aNuhWfXvfdVzztdXxd6kGSomOA85EzccplfleaUe6nsttVL/bS8N6LvMSv8qkt7otm5aq+nfo0nR9POk43ZI5T5FM0F147mdqsY6vgabCn8hjm4XcamQjHR/TrPL/tPa3Bx23FNjqOL3V6zVv2O+bzHWZaV8gt9H+3q7K1XwOM+0D8DHlOi7ca9rnWseFBNk4SQIAIByCbeDyPMsEGdWMe9ywXFvNUKHj2umm9dsUMoFaVT0DbfsfV6Ue+2hSr9XOWpZ70WFhQlz5fz0YedXpZrSFupuyth3nPk2wQ26rKm74XVegNVbz4lCe1HxctjquefUd2yKr/fxRxwF7Uvv5l/aBbaTjApG24+l7L6ZqL7SqH4+PMulsqi3faprCFJdm+dRqAwDOEsH2dIqZ9jukphDLUu1bXf3YPslfZZqExjrOVNeDiWedvjby2s+RZ1rrmeF7HWbo6/0vfZqrNmkKlv4jadfyaRs0qx505APSFHIbVtHy+6HBdv34vZ3Y17kYsz95ruMa2aTj5+o9ETVs879qv16rmtatp61NvaBJMuMA/LdcL1X3oIahZTpsKl9vSdPU6oJgGwBwFgi2pzPXQEL5TPtFeJn2/XSrH9sn2TYVDaG+na6Ri+tyHWegq7XGoWuqQgUH9abcIQqrzrHAq5g7AQ7mHpztVI3svQ5rrp81XXqLE3+z3SiaBor7IDPuw1/lNjaaLujOaj8nLf+XTAuBc7ynAABX6B9zJ+CKvMgEH759KYfKJ94fYKU6HD37Qfu+oNXg/U3jXKdNg6thXvVnYKz+537ugCuTCUhtKwk7UNqj/EfZf5V7/+ih3/tR+7EG6i1MrBuZwdhiHY79MJaNDgd4tAOlFaIJOQDgjBFsT+tRh9MAje1N89f+YJm6aqzi2s9NU0x1edRhMGIHSqtnntMe265rCgZeWn5/yrMOa7ejvgk6c759mF0VOgy2XfdT70vfVDM7h3qQmMhcd9XxA97U3b890rQFo4X2BQJr7UfJrwffdzL3azpyerYyNdbV5uIPMsdtrhYCAAAMRjPyaU1dIp9OvD8sV177+U6nA8m49nPRY59bHTcPTXUYOL0rzEBbTX1R6wGaiyLANs5RPYC5kd+geK7y2s9NA4vVNQ2mV9/OXLLazx91/Jxveu5PdbxdvMikMZE5F/WR1uOJ0tHULD/pWAYAgEUj2J5WoeOMzFjexNQo2Mt1HIy2ZVzvddx3uW9AXN/HRx3WnG3kX/sct/y+nsZUp2vwYzVPP1Z1o9P3UdKwjXOUq/n6aDt+sfo9X5rWeTyxn1W5Tr2pc599j6HQ8TO9WqvdNkVV04joXX2k7+U3BV+bR7UXcGwVJqCt39MuhVYvOjwmNzqs6XZpIQAAwKIQbE/vQdM0gUwm2AfOS1Pg+6h98Gr7cf5VW25IJrfQ8TRgVVnH+nnD72yf2FgmvVH5+/r3u5XJwCfaBzEr7fvV/q3jgPxRhwO7SSbD/6j9KM2x9nMi/9RlBNtNQdad9scvkrk+Eplz9rfMcYk991PoODi9035Arrjysce4PqVb13RsUzsVnGZqL0xqOt65DkcDj2SOeS5zX6Z9EliRyBzP/2g/4GKVfQZU9emvndd+vtP+HjpVaJCd2Ca12gCAs0Of7eltZTIbf4+4jz+1nGaWWI5U5tqrDk72UcfBTNW7hjel3rTsozrv8Cn1vpw3Ohx4LS+38yIzBVq1D+1tuWx1+So7SnpW+d29pH/Xljt1nKoDY52zjY6vD3v82iTyf9Y86HiQPDsgV9eYFu9aXkGirZGttwaRTgeIjzq+tu90XNhVdathg8ollf9/0vGUWk36XNePkn7Ufle9h57VHFhnMs+p+kCibS0EAABYNGq255FL+jzStn/pMmraMI5Y7oOd2UB76IBEuY5riyX3zLNPa5BUJuB29a7jgP9FZiRz1302beMcbWWuj/r80acUA/bjO+jeq5rnkF+CrOF3LnPHJzKFo67eNGxkcN9j90v9gtxC/d9xTft71PyjzwMA4I1gez6ZTGYkZJPyX1perQ+WxQY6n9UeVL3LBACRwrWQqNeOvXpseytTE+o63kEq6Z/l8m3316ukr2r/jnn5tz9PbONNJrCPtMwAsA97rLuuj1+Sflf/Zs3V6/BUNwOV6fhcpmupxznTcYGSa7Pn27rs+gAABFpJREFUB5nCnVPHwR6DSMOOwYPMeful5gKw6v7+pWHvk6zcxqn9NMkbfpcOSAcAALP5bbfbzZ2Ga7eWyZTcdSx3im1aee7NWDG9lQ6nXyoUvpZ2VW6zOsjVZ/VvFhqX/xZyS+tah/2yX+RfSxbpcFCpPts4R/XrY6vxAt76eZKusztM/TjkI+4r0vFgaWNc29X95B3LZjps3v6k65kVAABwYQi2lyNRc1+1U95lak82uo6MP85TpuNRhaNZUgJgyWIdj2fyh66z0AUAcAEItpfHjtZaH0DIepOpeXgU/diwfBsdD3o1pFYbwGWKZd5p1RYwz5pv/nEAAAYj2D4Psa6n2SrOn50i6l7HLTXIPAOwIpnnQaLj0dzftdwB8QAAcEKwDSC0toeKHU2aQiMAkqnJbptSjxYwAICzx2jkAEJrmtLpSQTaAA41Der5JjObQDZtUgAACI9gG0BoNgNtp4j6Q6ZJOYE2gKq88v8nhZneDACAxaAZOYDQViLDDMBNLEYbBwBcKIJtAAAAAAACoxk5AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQGME2AAAAAACBEWwDAAAAABAYwTYAAAAAAIERbAMAAAAAEBjBNgAAAAAAgRFsAwAAAAAQ2P8HM1dcoFQskX0AAAAASUVORK5CYII=" alt="Universidade Politécnica de Tomar" class="inst-logo">
+        <span class="inst-logo-label">UPTomar · SDC</span>
+      </div>
+
+      <div class="chip" id="chip">
+        <div class="chip-tag">CPU Core</div>
+        <div class="chip-emoji" id="chip-emoji">💤</div>
+        <div class="chip-name" id="chip-name">Idle</div>
+        <div class="chip-sub" id="chip-sub">all tasks blocked</div>
+      </div>
+
+      <div class="tick-col">
+        <div class="vtime-bar">t = <span id="vtime-val" style="font-family:var(--mono)">0</span> ms &nbsp;|&nbsp; tick = <span id="tick-val" style="font-family:var(--mono)">0</span></div>
+        <div class="tick-blk">
+          <div class="tick-n" id="tick-big">0</div>
+          <div class="tick-lbl">System Ticks (1 ms each)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sched-card">
+      <div class="sched-card-hd">⚙ Scheduler <span id="rq-badge"></span></div>
+      <div id="sched-msg">Press ▶ Play to start. The scheduler will decide which task runs next.</div>
+      <div class="rq" id="rq-row"></div>
+    </div>
+
+    <div class="diag-card">
+      <div class="sched-card-hd">🔀 Task State Diagram <i>hover = explain · click a task = follow it</i></div>
+      <div class="diag-cap" id="diag-cap"></div>
+      <svg id="state-svg" viewBox="0 0 480 400" role="img" aria-label="FreeRTOS valid task state transitions"></svg>
+      <div class="diag-legend" id="diag-legend"></div>
+    </div>
+  </div>
+
+  <!-- ── RIGHT: Event log ── -->
+  <div class="panel log-panel">
+    <div class="pnl-hd">Event Log</div>
+    <div class="log-body" id="log-body">
+      <div class="log-e le-sys">
+        <span class="log-t">0 ms</span>
+        <div class="log-tx">Simulation ready. Press ▶ Play to begin.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── BOTTOM: Timeline ── -->
+  <div class="timeline">
+    <div class="tl-hd">
+      Logic Analyser &mdash; Task Timeline
+      <label style="font-size:.63rem;font-weight:400;letter-spacing:0;color:var(--muted);text-transform:none">window
+        <select class="win-sel" onchange="setWindow(this.value)">
+          <option value="100">100 ms</option><option value="250">250 ms</option><option value="500">500 ms</option>
+          <option value="1000" selected>1 s</option><option value="2000">2 s</option><option value="5000">5 s</option>
+        </select></label>
+      <div class="leg">
+        <div class="leg-i"><div class="leg-dot" style="background:var(--running)"></div>Running</div>
+        <div class="leg-i"><div class="leg-dot" style="background:var(--ready)"></div>Ready</div>
+        <div class="leg-i"><div class="leg-dot" style="background:var(--blocked)"></div>Blocked</div>
+        <div class="leg-i"><div class="leg-dot" style="background:var(--susp)"></div>Suspended</div>
+      </div>
+    </div>
+    <canvas id="tl"></canvas>
+  </div>
+
+</main>
+
+<!-- ── Credits ── -->
+<footer>
+  <span>FreeRTOS Task Visualizer</span><span class="dot">·</span>
+  <span>Created by <b>Manuel Barros</b></span><span class="dot">·</span>
+  <span>Universidade Politécnica de Tomar (UPTomar). Todos os direitos reservados.</span>
+</footer>
+
+<!-- ── User manual ── -->
+<dialog id="manual" data-lang="en" aria-labelledby="man-title">
+  <div class="man-hd">
+    <h2 id="man-title">📖 User Manual · Manual de utilização</h2>
+    <div class="man-lang">
+      <button type="button" data-l="en" class="on" onclick="setManualLang('en')">EN</button>
+      <button type="button" data-l="pt" onclick="setManualLang('pt')">PT</button>
+    </div>
+    <button type="button" class="man-x" onclick="closeManual()" aria-label="Close">✕</button>
+  </div>
+  <div class="man-body">
+    <div lang="en">
+      <h3>What is this?</h3>
+      <p>An interactive simulation of the <b>FreeRTOS scheduler</b> running four tasks on a single CPU core. Time is virtual: <b>1 tick = 1 ms</b>. Each task runs for a short burst (<i>Run</i>), then calls <code>vTaskDelay()</code> and sleeps (<i>Delay</i>). Priorities decide who gets the CPU.</p>
+
+      <h3>Top bar</h3>
+      <ul>
+        <li><b>▶ Play / ⏸ Pause</b> — start or pause the simulation.</li>
+        <li><b>⏭ Tick</b> — advance exactly <b>one tick</b> (pauses first if running). Ideal to follow the scheduler's decisions one at a time.</li>
+        <li><b>↺ Reset</b> — back to t = 0. Your sliders and on/off switches are kept.</li>
+        <li><b>Speed 1×–20×</b> — from 2 up to 5000 ticks per second (shown next to the slider). Use low values to understand, high values to watch long-term behaviour.</li>
+      </ul>
+
+      <h3>Tasks panel (left)</h3>
+      <ul>
+        <li><b>On/off switch</b> — suspends the task (<code>vTaskSuspend</code>) or resumes it (<code>vTaskResume</code>). A suspended task is never scheduled.</li>
+        <li><b>Priority</b> (1–5, higher wins) · <b>Delay</b> (ms spent BLOCKED after each run) · <b>Run</b> (ms of CPU needed per run). Changes take effect immediately.</li>
+        <li>Counters show runs, % of time blocked, and each task's own output (LED, serial messages, temperature, button presses). The blue bar is the remaining delay.</li>
+      </ul>
+
+      <h3>Task states</h3>
+      <ul>
+        <li><span class="st r">RUNNING</span> — using the CPU (only one at a time).</li>
+        <li><span class="st y">READY</span> — able to run, waiting for the CPU.</li>
+        <li><span class="st b">BLOCKED</span> — waiting for the delay/event; uses no CPU.</li>
+        <li><span class="st s">SUSPENDED</span> — switched off until resumed.</li>
+      </ul>
+
+      <h3>Centre panel</h3>
+      <ul>
+        <li><b>CPU core</b> shows who ran in the last tick (or Idle). <b>Scheduler</b> explains its latest decision and lists the ready queue.</li>
+        <li><b>Task State Diagram</b> — adaptation of the FreeRTOS <i>valid task state transitions</i>. Each numbered dot is a task; it travels along the arrow of every transition, and the arrow lights up in the task's colour. <code>×N</code> counts how many times each transition happened.
+          <ul>
+            <li><b>Hover</b> a state or an arrow to read what it means.</li>
+            <li><b>Click</b> a dot (or a name in the legend) to follow one task; click again to release it.</li>
+            <li><b>Hover</b> an Event Log entry to highlight its arrow in the diagram.</li>
+          </ul></li>
+      </ul>
+
+      <h3>Event Log &amp; Timeline</h3>
+      <ul>
+        <li>The <b>Event Log</b> (right) lists every transition with its time stamp. It is generated by the same events as the diagram, so both always agree.</li>
+        <li>The <b>Logic Analyser</b> (bottom) shows each task's state over time: green = running, amber = ready, blue = blocked, grey = suspended. Use the <b>window</b> selector (100 ms – 5 s) to zoom — short windows are best with ⏭ Tick.</li>
+      </ul>
+
+      <h3>Scheduling rules used</h3>
+      <ul>
+        <li>The scheduler always picks the highest-priority READY task.</li>
+        <li>A task that becomes READY with a higher priority <b>preempts</b> the running one (Running → Ready); the preempted task keeps its remaining work.</li>
+        <li>Equal priorities: no time slicing — the running task keeps the CPU until it blocks; the next one is the task that ran longest ago (round-robin).</li>
+      </ul>
+
+      <h3>Things to try</h3>
+      <ul>
+        <li>Set Speed to 1× and press <b>⏭ Tick</b> repeatedly during the first 20 ticks to see how the four tasks take turns.</li>
+        <li>Give TaskSerial a long <i>Run</i> (20 ms) and watch TaskButton (priority 3) preempt it.</li>
+        <li>Set all priorities equal and observe the round-robin order.</li>
+        <li>Switch tasks off one by one and see the CPU become idle.</li>
+      </ul>
+    </div>
+
+    <div lang="pt">
+      <h3>O que é isto?</h3>
+      <p>Uma simulação interativa do <b>escalonador do FreeRTOS</b> com quatro tarefas num único núcleo de CPU. O tempo é virtual: <b>1 tick = 1 ms</b>. Cada tarefa executa durante um curto período (<i>Run</i>), depois chama <code>vTaskDelay()</code> e adormece (<i>Delay</i>). As prioridades decidem quem fica com o CPU.</p>
+
+      <h3>Barra superior</h3>
+      <ul>
+        <li><b>▶ Play / ⏸ Pause</b> — inicia ou pausa a simulação.</li>
+        <li><b>⏭ Tick</b> — avança exatamente <b>um tick</b> (pausa primeiro, se estiver a correr). Ideal para seguir as decisões do escalonador uma a uma.</li>
+        <li><b>↺ Reset</b> — volta a t = 0. Os sliders e os interruptores mantêm-se.</li>
+        <li><b>Speed 1×–20×</b> — de 2 a 5000 ticks por segundo (indicado junto ao slider). Valores baixos para compreender, valores altos para ver o comportamento a longo prazo.</li>
+      </ul>
+
+      <h3>Painel de tarefas (esquerda)</h3>
+      <ul>
+        <li><b>Interruptor</b> — suspende a tarefa (<code>vTaskSuspend</code>) ou retoma-a (<code>vTaskResume</code>). Uma tarefa suspensa nunca é escalonada.</li>
+        <li><b>Priority</b> (1–5, maior ganha) · <b>Delay</b> (ms em BLOCKED após cada execução) · <b>Run</b> (ms de CPU necessários por execução). As alterações têm efeito imediato.</li>
+        <li>Os contadores mostram as execuções, a % de tempo bloqueada e a saída de cada tarefa (LED, mensagens série, temperatura, pressões do botão). A barra azul é o atraso restante.</li>
+      </ul>
+
+      <h3>Estados das tarefas</h3>
+      <ul>
+        <li><span class="st r">RUNNING</span> — a usar o CPU (só uma de cada vez).</li>
+        <li><span class="st y">READY</span> — pronta para executar, à espera do CPU.</li>
+        <li><span class="st b">BLOCKED</span> — à espera do atraso/evento; não usa CPU.</li>
+        <li><span class="st s">SUSPENDED</span> — desligada até ser retomada.</li>
+      </ul>
+
+      <h3>Painel central</h3>
+      <ul>
+        <li>O <b>CPU Core</b> mostra quem executou no último tick (ou Idle). O <b>Scheduler</b> explica a sua última decisão e lista a fila de prontas.</li>
+        <li><b>Task State Diagram</b> — adaptação do diagrama <i>valid task state transitions</i> do FreeRTOS. Cada bolinha numerada é uma tarefa; desloca-se ao longo da seta de cada transição, e a seta acende com a cor da tarefa. <code>×N</code> conta quantas vezes ocorreu cada transição.
+          <ul>
+            <li><b>Passar o rato</b> sobre um estado ou seta explica o seu significado.</li>
+            <li><b>Clicar</b> numa bolinha (ou num nome da legenda) segue uma só tarefa; clicar de novo liberta-a.</li>
+            <li><b>Passar o rato</b> numa entrada do Event Log realça a respetiva seta no diagrama.</li>
+          </ul></li>
+      </ul>
+
+      <h3>Event Log e Timeline</h3>
+      <ul>
+        <li>O <b>Event Log</b> (direita) lista cada transição com o instante em que ocorreu. É gerado pelos mesmos eventos do diagrama, por isso ambos estão sempre de acordo.</li>
+        <li>O <b>Logic Analyser</b> (em baixo) mostra o estado de cada tarefa ao longo do tempo: verde = running, âmbar = ready, azul = blocked, cinzento = suspended. Use o seletor <b>window</b> (100 ms – 5 s) para ampliar — janelas curtas funcionam melhor com ⏭ Tick.</li>
+      </ul>
+
+      <h3>Regras de escalonamento usadas</h3>
+      <ul>
+        <li>O escalonador escolhe sempre a tarefa READY de maior prioridade.</li>
+        <li>Uma tarefa que fica READY com prioridade superior faz <b>preempção</b> da que está a executar (Running → Ready); a tarefa interrompida mantém o trabalho que lhe falta.</li>
+        <li>Prioridades iguais: sem time slicing — a tarefa em execução mantém o CPU até bloquear; segue-se a que executou há mais tempo (round-robin).</li>
+      </ul>
+
+      <h3>Experiências sugeridas</h3>
+      <ul>
+        <li>Coloque Speed em 1× e carregue em <b>⏭ Tick</b> durante os primeiros 20 ticks para ver como as quatro tarefas se revezam.</li>
+        <li>Dê à TaskSerial um <i>Run</i> longo (20 ms) e veja a TaskButton (prioridade 3) fazer preempção.</li>
+        <li>Ponha todas as prioridades iguais e observe a ordem round-robin.</li>
+        <li>Desligue as tarefas uma a uma e veja o CPU ficar em idle.</li>
+      </ul>
+    </div>
+</div>
+  <div class="man-ft">
+    <span><b>FreeRTOS Task Visualizer</b> — Manuel Barros · SDC2026 · Universidade Politécnica de Tomar (UPTomar)</span>
+    <button type="button" class="btn go" onclick="closeManual()">Got it · Entendido</button>
+  </div>
+</dialog>
+
+<!-- ── Concept tooltip ── -->
+<div id="tip"><div id="tip-title"></div><div id="tip-body"></div></div>
+
+<!-- ══════════════════ SIMULATION SCRIPT ══════════════════ -->
+<script>
+'use strict';
+
+/* ─── Constants ──────────────────────────────── */
+const MAX_LOG     = 120;
+const TICK_MS     = 1;       // 1 tick = 1 virtual ms
+const MAX_WINDOW  = 5000;    // largest timeline window (used for trimming)
+const MAX_TICKS_PER_FRAME = 400;
+
+// Speed slider (1–20) → simulation ticks per real second.
+// 1× is slow enough to follow every tick; 20× is fast-forward.
+const SPEED_TPS = [2, 5, 10, 20, 30, 50, 75, 100, 150, 200,
+                   300, 400, 500, 750, 1000, 1500, 2000, 3000, 4000, 5000];
+
+// Timeline zoom: window width (ms) → grid spacing (ms)
+const WINDOW_GRID = { 100: 10, 250: 25, 500: 50, 1000: 100, 2000: 200, 5000: 500 };
+
+/* ─── Task definitions ───────────────────────── */
+// runMs = CPU time (ticks) the task needs each time it runs, before calling vTaskDelay().
+const T = [
+  { id:0, name:'TaskLED',    title:'Task 1 — LED',    fn:'Task1code()', emoji:'💡', color:'#00e5ff',
+    delay:500,  priority:1, runMs:3, extraLabel:'LED' },
+  { id:1, name:'TaskSerial', title:'Task 2 — Serial', fn:'Task2code()', emoji:'📡', color:'#ce93d8',
+    delay:1000, priority:1, runMs:4, extraLabel:'Messages' },
+  { id:2, name:'TaskSensor', title:'Task 3 — Sensor', fn:'Task3code()', emoji:'🌡️', color:'#f06292',
+    delay:750,  priority:2, runMs:3, extraLabel:'Temp °C' },
+  { id:3, name:'TaskButton', title:'Task 4 — Button', fn:'Task4code()', emoji:'🔘', color:'#ff8a65',
+    delay:300,  priority:3, runMs:1, extraLabel:'Presses' },
+];
+const N = T.length;
+
+for (const t of T) {
+  Object.assign(t, {
+    enabled:true, state:'READY', blockedUntil:0, blkDur:0, remaining:0,
+    execCount:0, lastRunAt:t.id - N, blkAccum:0, blkStart:0,
+    ledOn:false, msgCount:0, temp:23.0, presses:0, btnDown:false,
+  });
+}
+
+/* ─── Task actions (executed when a task starts its burst) ─── */
+const ACTIONS = [
+  t => {
+    t.ledOn = !t.ledOn;
+    return { html: `💡 LED <b style="color:${t.ledOn ? 'var(--running)' : 'var(--muted2)'}">${t.ledOn ? 'ON ●' : 'OFF ○'}</b>`,
+             log:  `LED ${t.ledOn ? 'ON' : 'OFF'}` };
+  },
+  t => {
+    t.msgCount++;
+    return { html: `📡 <b>"Message #${t.msgCount}"</b> sent`,
+             log:  `Serial: "Message #${t.msgCount}"` };
+  },
+  t => {
+    t.temp = Math.round((t.temp + (Math.random() - 0.5) * 0.8) * 10) / 10;
+    return { html: `🌡️ ADC read → <b>${t.temp.toFixed(1)} °C</b>`,
+             log:  `Sensor read ${t.temp.toFixed(1)} °C` };
+  },
+  t => {
+    t.btnDown = Math.random() < 0.3;
+    if (t.btnDown) t.presses++;
+    return { html: `🔘 Button <b style="color:${t.btnDown ? 'var(--running)' : 'var(--muted2)'}">${t.btnDown ? 'PRESSED' : 'released'}</b>`,
+             log:  `Button ${t.btnDown ? 'PRESSED' : 'released'}` };
+  },
+];
+
+/* ─── Build task cards ───────────────────────── */
+(function buildCards() {
+  const host = document.getElementById('task-list');
+  host.innerHTML = T.map(t => {
+    const third = t.id === 0
+      ? `<div class="led-wrap"><div class="led" id="led"></div></div>`
+      : `<div class="stat-v" id="x-${t.id}" style="font-size:.78rem">0</div>`;
+    return `
+    <div class="tc tc${t.id}" id="tc-${t.id}">
+      <div class="tc-hd">
+        <div class="tc-ico">${t.emoji}</div>
+        <div class="tc-meta">
+          <div class="tc-name">${t.title}</div>
+          <div class="tc-fn">${t.fn}</div>
+        </div>
+        <div class="spill s-READY" id="pill-${t.id}">READY</div>
+        <label class="sw" title="Enable / disable this task (vTaskSuspend / vTaskResume)">
+          <input type="checkbox" id="en-${t.id}" checked onchange="setEnabled(${t.id}, this.checked)">
+          <span></span>
+        </label>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="stat-v" id="exec-${t.id}">0</div><div class="stat-l">Runs</div></div>
+        <div class="stat"><div class="stat-v" id="blk-pct-${t.id}">—</div><div class="stat-l">% Blocked</div></div>
+        <div class="stat">${third}<div class="stat-l">${t.extraLabel}</div></div>
+      </div>
+      <div class="bbar"><div class="bbar-fill" id="bp-${t.id}" style="width:0"></div></div>
+      <div class="cfg">
+        <span class="cfg-l">Priority</span>
+        <input type="range" min="1" max="5" value="${t.priority}" id="prio-${t.id}" oninput="setPrio(${t.id},+this.value)">
+        <span class="cfg-v"><span id="pv-${t.id}">${t.priority}</span></span>
+      </div>
+      <div class="cfg">
+        <span class="cfg-l">Delay (ms)</span>
+        <input type="range" min="100" max="2000" step="50" value="${t.delay}" id="dly-${t.id}" oninput="setDelay(${t.id},+this.value)">
+        <span class="cfg-v"><span id="dv-${t.id}">${t.delay}</span></span>
+      </div>
+      <div class="cfg">
+        <span class="cfg-l">Run (ms)</span>
+        <input type="range" min="1" max="1000" value="${t.runMs}" id="run-${t.id}" oninput="setRun(${t.id},+this.value)">
+        <span class="cfg-v"><span id="rv-${t.id}">${t.runMs}</span></span>
+      </div>
+      <div class="action-box" id="act-${t.id}">${t.emoji} Waiting…</div>
+    </div>`;
+  }).join('');
+})();
+
+/* ─── Timeline segments ──────────────────────── */
+// segs[taskId] = [{s:startTime, e:endTime, st:state}]
+const segs   = T.map(() => []);
+const curSeg = T.map(() => null);   // open segment per task
+
+function openSeg(tid, state) {
+  const s = curSeg[tid];
+  if (s) { s.e = vTime; segs[tid].push(s); }
+  curSeg[tid] = { s: vTime, e: null, st: state };
+}
+
+function initSegs() {
+  for (const t of T) { segs[t.id] = []; curSeg[t.id] = { s: vTime, e: null, st: t.state }; }
+}
+
+function trimSegs() {
+  const cut = vTime - MAX_WINDOW * 1.5;
+  for (let i = 0; i < N; i++) segs[i] = segs[i].filter(s => (s.e ?? vTime) >= cut);
+}
+
+/* ─── Simulation state ───────────────────────── */
+let vTime    = 0;     // virtual time in ms (= tick count)
+let simOn    = false;
+let speedIdx = 6;
+let tickAcc  = 0;     // fractional ticks accumulated between animation frames
+let lastRaf  = null;
+let rafId    = null;
+let current  = null;  // task currently on the CPU
+let lastExec = null;  // task that used the CPU during the most recent tick (null = idle)
+let windowMs = 1000;
+let schedMsgText = 'Press ▶ Play (or ⏭ Tick) to start. The scheduler will decide which task runs next.';
+
+// Single entry point for every task state change: updates the timeline and
+// the state diagram, and returns the transition key (e.g. 'READY>RUNNING')
+// so the matching Event Log entry can reference the same edge.
+function setState(t, st) {
+  const from = t.state;
+  t.state = st;
+  openSeg(t.id, st);
+  diagTransition(t, from, st);
+  return `${from}>${st}`;
+}
+
+/* ─── Scheduler ──────────────────────────────── */
+// Highest priority READY task; ties → the one that ran longest ago (round-robin).
+function pickNext() {
+  const ready = T.filter(t => t.state === 'READY');
+  if (!ready.length) return null;
+  ready.sort((a, b) => b.priority - a.priority || a.lastRunAt - b.lastRunAt);
+  return ready[0];
+}
+
+/* ─── Log ─────────────────────────────────────── */
+const logBody = document.getElementById('log-body');
+function addLog(txt, cls, edge) {
+  const d = document.createElement('div');
+  d.className = `log-e le-${cls}`;
+  if (edge) d.dataset.edge = edge;
+  d.innerHTML = `<span class="log-t">${vTime|0} ms</span><div class="log-tx">${txt}</div>`;
+  logBody.insertBefore(d, logBody.firstChild);
+  while (logBody.children.length > MAX_LOG) logBody.removeChild(logBody.lastChild);
+}
+
+/* ─── Core simulation: exactly one tick ──────── */
+let tickCount = 0;
+
+function dispatch(t, ready) {
+  const others = ready.filter(x => x !== t);
+  if (others.length) {
+    schedMsgText = t.priority > others[0].priority
+      ? `${t.name} wins — higher priority (${t.priority} > ${others[0].priority}). ${others[0].name} stays READY.`
+      : `Equal priority READY tasks. ${t.name} goes first (round-robin). ${others[0].name} is next.`;
+  } else {
+    schedMsgText = `${t.name} is the only READY task. CPU assigned.`;
+  }
+
+  const resumed = t.remaining > 0;
+  const edge = setState(t, 'RUNNING');
+  t.lastRunAt = vTime;
+  current = t;
+
+  if (resumed) {
+    addLog(`▶ ${t.name} → RUNNING (resumes, ${t.remaining} ms of work left)`, 'run', edge);
+  } else {
+    t.remaining = t.runMs;
+    t.execCount++;
+    const a = ACTIONS[t.id](t);
+    document.getElementById(`act-${t.id}`).innerHTML = a.html;
+    addLog(`▶ ${t.name} → RUNNING | ${a.log}`, 'run', edge);
+  }
+}
+
+function tick() {
+  // 1. Tick interrupt: wake tasks whose delay expired
+  for (const t of T) {
+    if (t.state === 'BLOCKED' && t.blockedUntil <= vTime) {
+      t.blkAccum += vTime - t.blkStart;
+      const edge = setState(t, 'READY');
+      addLog(`✓ ${t.name} → <b style="color:var(--ready)">READY</b> (delay expired)`, 'ready', edge);
+    }
+  }
+
+  // 2. Scheduler: preempt on higher priority, or pick a task if the CPU is free
+  const best = pickNext();
+  if (current && best && best.priority > current.priority) {
+    const victim = current;
+    const edge = setState(victim, 'READY');
+    addLog(`⚡ ${best.name} (p=${best.priority}) preempts ${victim.name} (p=${victim.priority})`, 'sys', edge);
+    current = null;
+  }
+  if (!current && best) {
+    dispatch(best, T.filter(t => t.state === 'READY'));
+  }
+
+  // 3. Execute one tick of work
+  if (current) {
+    const t = current;
+    lastExec = t;
+    t.remaining--;
+    vTime += TICK_MS;
+    schedMsgText = t.remaining > 0
+      ? `${t.name} is running — ${t.remaining} ms of work left before vTaskDelay(${t.delay}).`
+      : `${t.name} finished its work and calls vTaskDelay(${t.delay} ms).`;
+
+    if (t.remaining <= 0) {
+      t.blockedUntil = vTime + t.delay;
+      t.blkStart = vTime;
+      t.blkDur = t.delay;
+      const edge = setState(t, 'BLOCKED');
+      addLog(`⏸ ${t.name} → <b style="color:var(--blocked)">BLOCKED</b> for ${t.delay} ms`, 'block', edge);
+      current = null;
+    }
+  } else {
+    lastExec = null;
+    vTime += TICK_MS;
+    const waiting = T.filter(t => t.state === 'BLOCKED');
+    if (waiting.length) {
+      const soonest = waiting.reduce((a, b) => a.blockedUntil < b.blockedUntil ? a : b);
+      schedMsgText = `CPU idle — all active tasks BLOCKED. ${soonest.name} wakes at ${soonest.blockedUntil|0} ms.`;
+    } else {
+      schedMsgText = 'CPU idle — all tasks are suspended (disabled).';
+    }
+  }
+
+  if (++tickCount % 200 === 0) trimSegs();
+}
+
+/* ─── RAF loop ───────────────────────────────── */
+function raf(ts) {
+  if (!simOn) return;
+  if (lastRaf === null) lastRaf = ts;
+  const dtReal = Math.min((ts - lastRaf) / 1000, 0.05); // cap 50ms
+  lastRaf = ts;
+  tickAcc += dtReal * SPEED_TPS[speedIdx - 1];
+  let n = Math.min(Math.floor(tickAcc), MAX_TICKS_PER_FRAME);
+  tickAcc = Math.min(tickAcc - n, 1);
+  while (n-- > 0) tick();
+  updateUI();
+  drawTimeline();
+  rafId = requestAnimationFrame(raf);
+}
+
+/* ─── UI update ──────────────────────────────── */
+function updateUI() {
+  // Times
+  document.getElementById('vtime-val').textContent = (vTime|0);
+  const ticks = (vTime / TICK_MS)|0;
+  document.getElementById('tick-val').textContent  = ticks;
+  document.getElementById('tick-big').textContent  = ticks;
+
+  // CPU chip: the task that held the CPU during the last executed tick
+  const chip = document.getElementById('chip');
+  const last = lastExec;
+  if (last) {
+    chip.className = 'chip running';
+    chip.style.setProperty('--tc', last.color);
+    document.getElementById('chip-emoji').textContent = last.emoji;
+    document.getElementById('chip-name').textContent  = last.name;
+    document.getElementById('chip-sub').textContent   = `priority ${last.priority}`;
+  } else {
+    chip.className = 'chip';
+    document.getElementById('chip-emoji').textContent = '💤';
+    document.getElementById('chip-name').textContent  = 'Idle';
+    document.getElementById('chip-sub').textContent   = vTime ? 'no task to run' : 'not started';
+  }
+
+  // Scheduler text + ready queue
+  document.getElementById('sched-msg').textContent = schedMsgText;
+  const readyT = T.filter(t => t.state === 'READY');
+  const rqRow  = document.getElementById('rq-row');
+  rqRow.innerHTML = readyT.length
+    ? readyT.map(t => `<span class="rq-pill">${t.name} (p=${t.priority})</span>`).join('')
+    : `<span class="rq-empty">— ready queue empty —</span>`;
+
+  // Per-task
+  for (const t of T) {
+    const pill = document.getElementById(`pill-${t.id}`);
+    pill.className = `spill s-${t.state}`;
+    pill.textContent = t.state;
+    document.getElementById(`exec-${t.id}`).textContent = t.execCount;
+
+    const bp = document.getElementById(`bp-${t.id}`);
+    const elapsed = t.state === 'BLOCKED' ? vTime - t.blkStart : 0;
+    bp.style.width = t.state === 'BLOCKED' ? Math.min(100, elapsed / t.blkDur * 100) + '%' : '0';
+    if (vTime > 0) {
+      document.getElementById(`blk-pct-${t.id}`).textContent = (((t.blkAccum + elapsed) / vTime * 100)|0) + '%';
+    }
+  }
+
+  // Task-specific readouts
+  document.getElementById('led').className = 'led' + (T[0].ledOn ? ' on' : '');
+  document.getElementById('x-1').textContent = T[1].msgCount;
+  document.getElementById('x-2').textContent = T[2].temp.toFixed(1);
+  document.getElementById('x-3').textContent = T[3].presses;
+}
+
+/* ─── Canvas timeline ────────────────────────── */
+const canvas = document.getElementById('tl');
+const ctx    = canvas.getContext('2d');
+const LABEL_W = 86;
+const MAX_ROW_H = 32;
+const AXIS_H  = 18;
+const TASK_NAMES = T.map(t => t.title.replace(' — ', ': '));
+const SEG_COLORS = { RUNNING: '#00e676', READY: '#ffab00', BLOCKED: '#448aff', SUSPENDED: '#6b7785' };
+const SEG_ALPHA  = { RUNNING: 1, READY: 0.7, BLOCKED: 0.45, SUSPENDED: 0.25 };
+
+function drawTimeline() {
+  const W = canvas.width, H = canvas.height;
+  if (W < 10 || H < 10) return;
+  ctx.clearRect(0, 0, W, H);
+
+  const ROW_H   = Math.min(MAX_ROW_H, Math.floor((H - AXIS_H) / N));
+  const chartW  = W - LABEL_W - 4;
+  const winEnd  = Math.max(vTime, windowMs);
+  const winSt   = winEnd - windowMs;
+  const msPx    = windowMs / chartW;
+
+  ctx.fillStyle = '#03060b';
+  ctx.fillRect(0, 0, W, H);
+
+  for (let r = 0; r < N; r++) {
+    ctx.fillStyle = r % 2 === 0 ? 'rgba(255,255,255,.012)' : 'rgba(0,0,0,0)';
+    ctx.fillRect(LABEL_W, r * ROW_H, chartW, ROW_H);
+  }
+
+  // Grid lines
+  const gInt = WINDOW_GRID[windowMs];
+  const gFirst = Math.ceil(winSt / gInt) * gInt;
+  ctx.strokeStyle = 'rgba(255,255,255,.06)';
+  ctx.lineWidth = 1;
+  for (let t = gFirst; t <= winEnd; t += gInt) {
+    const x = LABEL_W + (t - winSt) / msPx;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, N * ROW_H); ctx.stroke();
+  }
+
+  const drawSeg = (seg, y0, end) => {
+    if (end < winSt || seg.s > winEnd) return;
+    const x1 = LABEL_W + Math.max(0, (seg.s - winSt) / msPx);
+    const x2 = LABEL_W + Math.min(chartW, (end - winSt) / msPx);
+    const bw = Math.max(x2 - x1, 1);
+    ctx.globalAlpha = SEG_ALPHA[seg.st] ?? 0.5;
+    ctx.fillStyle   = SEG_COLORS[seg.st] ?? '#555';
+    ctx.fillRect(x1, y0 + 4, bw, ROW_H - 8);
+    ctx.globalAlpha = 1;
+    if (bw > 22 && seg.st === 'RUNNING') {
+      ctx.fillStyle = 'rgba(0,0,0,.7)';
+      ctx.font = 'bold 8px monospace';
+      ctx.fillText('RUN', x1 + 3, y0 + ROW_H / 2 + 3);
+    }
+  };
+
+  for (let ti = 0; ti < N; ti++) {
+    const y0 = ti * ROW_H;
+    ctx.fillStyle = T[ti].enabled ? T[ti].color : 'rgba(200,210,220,.35)';
+    ctx.globalAlpha = 0.85;
+    ctx.font = `500 10px system-ui, sans-serif`;
+    ctx.fillText(TASK_NAMES[ti], 4, y0 + ROW_H / 2 + 4);
+    ctx.globalAlpha = 1;
+
+    for (const seg of segs[ti]) drawSeg(seg, y0, seg.e ?? vTime);
+    const cs = curSeg[ti];
+    if (cs) drawSeg(cs, y0, vTime);
+  }
+
+  // Row dividers
+  ctx.strokeStyle = 'rgba(255,255,255,.08)';
+  ctx.lineWidth = 1;
+  for (let r = 0; r <= N; r++) {
+    ctx.beginPath(); ctx.moveTo(LABEL_W, r * ROW_H); ctx.lineTo(W, r * ROW_H); ctx.stroke();
+  }
+
+  // Time axis
+  ctx.fillStyle = 'rgba(120,140,160,.55)';
+  ctx.font = '9px monospace';
+  for (let t = gFirst; t <= winEnd; t += gInt) {
+    const x = LABEL_W + (t - winSt) / msPx;
+    ctx.fillText(`${t}`, x + 2, N * ROW_H + AXIS_H - 4);
+  }
+
+  // "Now" cursor
+  ctx.strokeStyle = 'rgba(255,255,255,.25)';
+  ctx.setLineDash([3, 4]);
+  const nowX = LABEL_W + (vTime - winSt) / msPx;
+  ctx.beginPath(); ctx.moveTo(nowX, 0); ctx.lineTo(nowX, N * ROW_H); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(255,255,255,.3)';
+  ctx.font = '8px monospace';
+  ctx.fillText(`now`, Math.min(nowX, W - 24) - 2, N * ROW_H + AXIS_H - 4);
+}
+
+function resizeCanvas() {
+  const r = canvas.parentElement.getBoundingClientRect();
+  canvas.width  = Math.floor(r.width) - 2;
+  canvas.height = Math.floor(r.height) - 34;
+  drawTimeline();
+}
+window.addEventListener('resize', resizeCanvas);
+
+/* ─── Controls ───────────────────────────────── */
+function setPlayButton(playing) {
+  const btn = document.getElementById('btn-play');
+  btn.textContent = playing ? '⏸ Pause' : '▶ Play';
+  btn.className = playing ? 'btn' : 'btn go';
+}
+
+function togglePlay() {
+  simOn = !simOn;
+  setPlayButton(simOn);
+  if (simOn) {
+    lastRaf = null;
+    tickAcc = 0;
+    rafId = requestAnimationFrame(raf);
+  } else {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    schedMsgText = 'Paused. Press ▶ to continue or ⏭ Tick to step one tick.';
+    updateUI();
+  }
+}
+
+function stepTick() {
+  if (simOn) togglePlay();
+  diagAge();
+  tick();
+  updateUI();
+  drawTimeline();
+}
+
+function resetSim() {
+  simOn = false;
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+  vTime = 0; tickCount = 0; lastRaf = null; tickAcc = 0;
+  current = null; lastExec = null;
+  schedMsgText = 'Press ▶ Play (or ⏭ Tick) to start the simulation.';
+
+  for (const t of T) {
+    t.state = t.enabled ? 'READY' : 'SUSPENDED';
+    t.blockedUntil = 0; t.blkDur = 0; t.remaining = 0;
+    t.execCount = 0;
+    t.ledOn = false; t.msgCount = 0; t.temp = 23.0; t.presses = 0; t.btnDown = false;
+    t.lastRunAt = t.id - N;
+    t.blkAccum = 0; t.blkStart = 0;
+    document.getElementById(`act-${t.id}`).textContent = `${t.emoji} Waiting…`;
+    document.getElementById(`blk-pct-${t.id}`).textContent = '—';
+  }
+  initSegs();
+  diagReset();
+
+  logBody.innerHTML = `<div class="log-e le-sys">
+    <span class="log-t">0 ms</span>
+    <div class="log-tx">Simulation reset. Press ▶ Play or ⏭ Tick to begin.</div></div>`;
+
+  setPlayButton(false);
+  updateUI();
+  drawTimeline();
+}
+
+function setSpeed(v) {
+  speedIdx = v;
+  document.getElementById('spd-val').textContent = v + '×';
+  document.getElementById('spd-tps').textContent = `(${SPEED_TPS[v - 1]} ticks/s)`;
+}
+
+function setWindow(v) {
+  windowMs = +v;
+  drawTimeline();
+}
+
+function setPrio(tid, v) {
+  T[tid].priority = v;
+  document.getElementById(`pv-${tid}`).textContent = v;
+  addLog(`⚙ Task ${tid+1} priority → ${v}`, 'sys');
+}
+
+function setDelay(tid, v) {
+  T[tid].delay = v;
+  document.getElementById(`dv-${tid}`).textContent = v;
+  addLog(`⚙ Task ${tid+1} vTaskDelay → ${v} ms`, 'sys');
+}
+
+function setRun(tid, v) {
+  T[tid].runMs = v;
+  document.getElementById(`rv-${tid}`).textContent = v;
+  addLog(`⚙ Task ${tid+1} run time → ${v} ms`, 'sys');
+}
+
+function setEnabled(tid, on) {
+  const t = T[tid];
+  if (t.enabled === on) return;
+  t.enabled = on;
+  document.getElementById(`tc-${tid}`).classList.toggle('disabled', !on);
+  if (!on) {
+    if (t.state === 'BLOCKED') t.blkAccum += vTime - t.blkStart;
+    if (current === t) current = null;
+    t.remaining = 0;
+    const edge = setState(t, 'SUSPENDED');
+    addLog(`⏹ ${t.name} <b style="color:var(--muted2)">SUSPENDED</b> (disabled)`, 'sys', edge);
+    document.getElementById(`act-${tid}`).innerHTML = `${t.emoji} Disabled`;
+  } else {
+    const edge = setState(t, 'READY');
+    addLog(`⏵ ${t.name} resumed → <b style="color:var(--ready)">READY</b>`, 'ready', edge);
+    document.getElementById(`act-${tid}`).innerHTML = `${t.emoji} Waiting…`;
+  }
+  updateUI();
+  drawTimeline();
+}
+
+/* ─── Task state diagram ─────────────────────── */
+// Adaptation of the FreeRTOS "Valid task state transitions" diagram.
+// Every call to setState() ends up in diagTransition(), so the diagram and the
+// Event Log always describe exactly the same transitions.
+const SVGNS  = 'http://www.w3.org/2000/svg';
+const NODE_W = 110, NODE_H = 56;
+const NODE_DEFS = {
+  SUSPENDED: { x:120, y:8,   tip:'<b>Suspended</b> — cannot be scheduled and has no timeout. A task only enters or leaves this state through vTaskSuspend() / vTaskResume().' },
+  READY:     { x:120, y:172, tip:'<b>Ready</b> — able to execute, but not running because a task of equal or higher priority is in the Running state.' },
+  BLOCKED:   { x:120, y:336, tip:'<b>Blocked</b> — waiting for a temporal event (vTaskDelay) or an external one (queue, semaphore, notification…). Uses no CPU time.' },
+  RUNNING:   { x:350, y:172, tip:'<b>Running</b> — actually executing and using the processor. On a single core only one task can be Running at a time.' },
+};
+const SUSP_WHY = 'vTaskSuspend() called';
+const EDGE_DEFS = [
+  { key:'START>READY', d:'M70,200 L120,200', lab:{x:93,y:192,t:'create'},
+    tip:'<b>Task created</b> — xTaskCreate() puts every new task in the Ready state.', why:() => 'created' },
+  { key:'READY>RUNNING', d:'M230,188 L350,188', lab:{x:290,y:181,t:'Scheduler selects'},
+    tip:'<b>Ready → Running</b> — the scheduler picks the highest-priority READY task (equal priority: round-robin).', why:() => 'selected by the scheduler' },
+  { key:'RUNNING>READY', d:'M350,212 L230,212', lab:{x:290,y:226,t:'Preempted'},
+    tip:'<b>Running → Ready</b> — a higher-priority task became READY and preempted it (or the task yielded). It keeps its remaining work.', why:() => 'preempted by a higher-priority task' },
+  { key:'RUNNING>BLOCKED', d:'M405,228 C405,336 340,364 230,364', lab:{x:359,y:337,t:'Blocking API called'},
+    tip:'<b>Running → Blocked</b> — the task called a blocking API such as vTaskDelay(), or a queue / semaphore wait.', why:t => `blocking API called — vTaskDelay(${t.delay})` },
+  { key:'BLOCKED>READY', d:'M175,336 L175,228', lab:{x:175,y:285,t:'Event / timeout'},
+    tip:'<b>Blocked → Ready</b> — the awaited event happened or the timeout (the vTaskDelay period) expired.', why:() => 'event / delay expired' },
+  { key:'READY>SUSPENDED', d:'M150,172 L150,64', lab:{x:150,y:100,t:'vTaskSuspend()'},
+    tip:'<b>Ready → Suspended</b> — vTaskSuspend() called.', why:() => SUSP_WHY },
+  { key:'RUNNING>SUSPENDED', d:'M405,172 C405,60 340,36 230,36', lab:{x:359,y:62,t:'vTaskSuspend()'},
+    tip:'<b>Running → Suspended</b> — vTaskSuspend() called while the task was on the CPU.', why:() => SUSP_WHY },
+  { key:'BLOCKED>SUSPENDED', d:'M120,364 C10,364 10,36 120,36', lab:{x:37,y:200,t:'vTaskSuspend()',rot:-90},
+    tip:'<b>Blocked → Suspended</b> — vTaskSuspend() called while the task was blocked; its delay is abandoned.', why:() => SUSP_WHY },
+  { key:'SUSPENDED>READY', d:'M200,64 L200,172', lab:{x:200,y:136,t:'vTaskResume()'},
+    tip:'<b>Suspended → Ready</b> — vTaskResume() called. The task always goes to Ready first, never straight to Running.', why:() => 'vTaskResume() called' },
+];
+const FLY_MS = 420;
+const DIAG_DEFAULT = 'All tasks start in <b>READY</b> (xTaskCreate). Press ▶ Play or ⏭ Tick and watch the tasks move along the arrows.';
+
+const dsvg = document.getElementById('state-svg');
+const D = { edges:{}, nodes:{}, toks:[], flyers:[], clock:0, focus:null, hoverKey:null, hoverTip:null, last:null };
+
+function svgEl(tag, attrs, parent) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+function buildDiagram() {
+  const gEdges = svgEl('g', {}, dsvg);
+  const gNodes = svgEl('g', {}, dsvg);
+  const gToks  = svgEl('g', {}, dsvg);
+  const gFly   = svgEl('g', {}, dsvg);
+  D.gFly = gFly;
+
+  for (const def of EDGE_DEFS) {
+    const g  = svgEl('g', { class:'d-edge' }, gEdges);
+    const ln = svgEl('path', { class:'ln', d:def.d }, g);
+    const L  = ln.getTotalLength();
+    const p1 = ln.getPointAtLength(L), p0 = ln.getPointAtLength(L - 6);
+    const ang = Math.atan2(p1.y - p0.y, p1.x - p0.x) * 180 / Math.PI;
+    const ah = svgEl('path', { class:'ah', d:'M0,0 L-9,-4.5 L-9,4.5 Z', transform:`translate(${p1.x} ${p1.y}) rotate(${ang})` }, g);
+    const hit = svgEl('path', { class:'hit', d:def.d }, g);
+    const lb = svgEl('text', { class:'lb', x:def.lab.x, y:def.lab.y,
+      transform: def.lab.rot ? `rotate(${def.lab.rot} ${def.lab.x} ${def.lab.y})` : '' }, g);
+    lb.appendChild(document.createTextNode(def.lab.t));
+    const cnt = svgEl('tspan', { class:'n' }, lb);
+    D.edges[def.key] = { def, g, ln, ah, cnt, path:ln, len:L, count:0, fire:null, color:null, task:null };
+    hit.addEventListener('mouseenter', () => setHover(def.key, def.tip));
+    hit.addEventListener('mouseleave', () => setHover(null, null));
+  }
+  svgEl('circle', { class:'d-start', cx:66, cy:200, r:4 }, gEdges);
+
+  for (const st of Object.keys(NODE_DEFS)) {
+    const nd = NODE_DEFS[st];
+    const g = svgEl('g', { class:`d-node n-${st}` }, gNodes);
+    svgEl('rect', { x:nd.x, y:nd.y, width:NODE_W, height:NODE_H, rx:12 }, g);
+    const nm = svgEl('text', { class:'nm', x:nd.x + NODE_W/2, y:nd.y + 20 }, g);
+    nm.textContent = st.charAt(0) + st.slice(1).toLowerCase();
+    const ct = svgEl('text', { class:'ct', x:nd.x + NODE_W - 4, y:nd.y + NODE_H - 5 }, g);
+    D.nodes[st] = { g, ct, def:nd, n:-1 };
+    g.addEventListener('mouseenter', () => setHover(null, nd.tip, st));
+    g.addEventListener('mouseleave', () => setHover(null, null));
+  }
+
+  for (const t of T) {
+    const g = svgEl('g', { class:'d-tok' }, gToks);
+    svgEl('circle', { r:8, fill:t.color }, g);
+    const tx = svgEl('text', { dy:3.3 }, g);
+    tx.textContent = t.id + 1;
+    svgEl('title', {}, g).textContent = `${t.title} — click to follow`;
+    g.addEventListener('click', () => toggleFocus(t.id));
+    D.toks[t.id] = g;
+  }
+
+  const lg = document.getElementById('diag-legend');
+  lg.innerHTML = T.map(t =>
+    `<span class="dl-chip" data-t="${t.id}" title="Click to follow this task"><span class="dl-dot" style="background:${t.color}">${t.id + 1}</span>${t.title.split('— ')[1]}</span>`
+  ).join('');
+  lg.addEventListener('click', e => {
+    const c = e.target.closest('.dl-chip');
+    if (c) toggleFocus(+c.dataset.t);
+  });
+}
+
+function toggleFocus(id) {
+  D.focus = D.focus === id ? null : id;
+}
+
+function setHover(edgeKey, tip, nodeKey) {
+  D.hoverKey = edgeKey;
+  D.hoverNode = nodeKey || null;
+  D.hoverTip = tip;
+}
+
+/* Called from setState() for every transition */
+function diagTransition(t, from, to) {
+  const e = D.edges[`${from}>${to}`];
+  if (!e) return;
+  e.count++;
+  e.fire  = D.clock;
+  e.color = t.color;
+  e.task  = t.id;
+  D.last = `<b style="color:${t.color}">${t.name}</b> <span class="tr">${from} → ${to}</span> — ${e.def.why(t)}`;
+  spawnFlyer(t, e, 0);
+}
+
+function spawnFlyer(t, e, delay) {
+  // a task can only be "in flight" once: land any previous flight immediately
+  D.flyers = D.flyers.filter(f => { if (f.t === t) { f.el.remove(); return false; } return true; });
+  if (D.flyers.length >= 14) return;
+  const g = svgEl('g', { class:'d-fly', style:`color:${t.color}`, visibility:'hidden' }, D.gFly);
+  svgEl('circle', { r:8, fill:t.color }, g);
+  svgEl('text', { dy:3.3 }, g).textContent = t.id + 1;
+  D.flyers.push({ t, e, el:g, start:performance.now() + delay });
+}
+
+function diagReset() {
+  for (const f of D.flyers) f.el.remove();
+  D.flyers = [];
+  D.last = null;
+  D.focus = null;
+  for (const k in D.edges) { const e = D.edges[k]; e.count = 0; e.fire = null; e.task = null; }
+  let i = 0;
+  for (const t of T) {
+    if (!t.enabled) continue;
+    D.edges['START>READY'].count++;
+    spawnFlyer(t, D.edges['START>READY'], i++ * 140);
+  }
+}
+
+// Makes the highlights of previous ticks fade when single-stepping (time is frozen while paused)
+function diagAge() { D.clock += 2500; }
+
+let diagLast = null;
+function diagLoop(ts) {
+  const dt = diagLast === null ? 0 : Math.min(ts - diagLast, 100);
+  diagLast = ts;
+  if (simOn) D.clock += dt;
+  const now = performance.now();
+
+  // flyers
+  const flying = new Set();
+  D.flyers = D.flyers.filter(f => {
+    const p = (now - f.start) / FLY_MS;
+    if (p >= 1) { f.el.remove(); return false; }
+    flying.add(f.t.id);
+    if (p < 0) return true;
+    const k = p < .5 ? 2*p*p : 1 - Math.pow(-2*p + 2, 2) / 2;
+    const pt = f.e.path.getPointAtLength(k * f.e.len);
+    f.el.setAttribute('visibility', 'visible');
+    f.el.setAttribute('transform', `translate(${pt.x} ${pt.y})`);
+    f.el.style.opacity = D.focus === null || D.focus === f.t.id ? 1 : .3;
+    return true;
+  });
+
+  // tokens inside their current state node
+  const perNode = { SUSPENDED:[], READY:[], BLOCKED:[], RUNNING:[] };
+  for (const t of T) perNode[t.state].push(t);
+  for (const st in perNode) {
+    const nd = D.nodes[st], arr = perNode[st];
+    nd.g.classList.toggle('occ', arr.length > 0);
+    nd.g.classList.toggle('hov', D.hoverNode === st);
+    if (nd.n !== arr.length) { nd.ct.textContent = arr.length ? `×${arr.length}` : ''; nd.n = arr.length; }
+    arr.forEach((t, i) => {
+      const x = nd.def.x + NODE_W/2 + (i - (arr.length - 1)/2) * 20;
+      const g = D.toks[t.id];
+      g.setAttribute('transform', `translate(${x} ${nd.def.y + 38})`);
+      g.style.display = flying.has(t.id) ? 'none' : '';
+      g.classList.toggle('dim', D.focus !== null && D.focus !== t.id);
+      g.classList.toggle('focus', D.focus === t.id);
+    });
+  }
+
+  // edge glow (fades with the diagram clock)
+  for (const k in D.edges) {
+    const e = D.edges[k];
+    let I = e.fire === null ? 0 : Math.max(0, 1 - (D.clock - e.fire) / 2200);
+    if (D.focus !== null && e.task !== D.focus) I *= .3;
+    const hov = D.hoverKey === k;
+    e.g.classList.toggle('hov', hov);
+    if (I > 0.02) {
+      e.ln.style.stroke = e.color;
+      e.ln.style.strokeWidth = 1.6 + 2.2 * I;
+      e.ln.style.strokeOpacity = .45 + .55 * I;
+      e.ah.style.fill = e.color;
+    } else {
+      e.ln.removeAttribute('style'); e.ah.removeAttribute('style');
+    }
+    const txt = e.count && k !== 'START>READY' ? ` ×${e.count}` : '';
+    if (e.cnt.textContent !== txt) e.cnt.textContent = txt;
+  }
+
+  // legend + caption
+  document.querySelectorAll('#diag-legend .dl-chip').forEach(c => {
+    const id = +c.dataset.t;
+    c.classList.toggle('focus', D.focus === id);
+    c.classList.toggle('off', !T[id].enabled);
+  });
+  const cap = document.getElementById('diag-cap');
+  const html = D.hoverTip || D.last || DIAG_DEFAULT;
+  if (cap._h !== html) { cap.innerHTML = html; cap._h = html; }
+
+  requestAnimationFrame(diagLoop);
+}
+
+// Event Log ↔ diagram: hovering a log entry highlights the edge it describes
+logBody.addEventListener('mouseover', e => {
+  const row = e.target.closest('.log-e[data-edge]');
+  const key = row ? row.dataset.edge : null;
+  if (key) setHover(key, D.edges[key].def.tip);
+  else if (D.hoverKey && !e.target.closest('.d-edge')) setHover(null, null);
+});
+logBody.addEventListener('mouseleave', () => setHover(null, null));
+
+buildDiagram();
+diagReset();
+requestAnimationFrame(diagLoop);
+
+
+/* ─── User manual ────────────────────────────── */
+const manual = document.getElementById('manual');
+function openManual() {
+  if (simOn) togglePlay();
+  manual.showModal();
+  manual.querySelector('.man-body').scrollTop = 0;
+}
+function closeManual() { manual.close(); }
+function setManualLang(l) {
+  manual.dataset.lang = l;
+  manual.querySelectorAll('.man-lang button').forEach(b => b.classList.toggle('on', b.dataset.l === l));
+  try { localStorage.setItem('ftv-lang', l); } catch (e) {}
+}
+manual.addEventListener('click', e => { if (e.target === manual) closeManual(); });  // click on backdrop
+try { const l = localStorage.getItem('ftv-lang'); if (l === 'pt' || l === 'en') setManualLang(l); } catch (e) {}
+
+/* ─── Proteção de Propriedade Intelectual e Anti-Cópia ─── */
+document.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  return false;
+});
+
+document.addEventListener('keydown', e => {
+  // Tecla '?' abre manual
+  if (e.key === '?' && !manual.open && !/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) {
+    openManual();
+    return;
+  }
+  // Bloquear F12
+  if (e.key === 'F12' || e.keyCode === 123) {
+    e.preventDefault();
+    return false;
+  }
+  // Bloquear Ctrl+U / Cmd+Alt+U (Ver código-fonte)
+  if (((e.ctrlKey || e.metaKey) && (e.key === 'u' || e.key === 'U')) ||
+      (e.metaKey && e.altKey && (e.key === 'u' || e.key === 'U'))) {
+    e.preventDefault();
+    return false;
+  }
+  // Bloquear Ctrl+S / Cmd+S (Guardar página)
+  if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+    e.preventDefault();
+    return false;
+  }
+  // Bloquear Ctrl+P / Cmd+P (Imprimir)
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
+    e.preventDefault();
+    return false;
+  }
+  // Bloquear DevTools: Ctrl+Shift+I / J / C ou Cmd+Alt+I / J / C
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && /^[IJCijc]$/.test(e.key)) {
+    e.preventDefault();
+    return false;
+  }
+  if (e.metaKey && e.altKey && /^[IJCijc]$/.test(e.key)) {
+    e.preventDefault();
+    return false;
+  }
+  // Bloquear cópia fora de campos de input
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
+    const tag = (e.target && e.target.tagName) ? e.target.tagName.toUpperCase() : '';
+    if (!/INPUT|TEXTAREA/.test(tag)) {
+      e.preventDefault();
+      return false;
+    }
+  }
+  // Bloquear seleção global fora de campos de input
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+    const tag = (e.target && e.target.tagName) ? e.target.tagName.toUpperCase() : '';
+    if (!/INPUT|TEXTAREA/.test(tag)) {
+      e.preventDefault();
+      return false;
+    }
+  }
+});
+
+document.addEventListener('copy', e => {
+  const tag = (e.target && e.target.tagName) ? e.target.tagName.toUpperCase() : '';
+  if (!/INPUT|TEXTAREA/.test(tag)) {
+    e.preventDefault();
+    return false;
+  }
+});
+
+document.addEventListener('dragstart', e => {
+  if (e.target && e.target.tagName && e.target.tagName.toUpperCase() === 'IMG') {
+    e.preventDefault();
+    return false;
+  }
+});
+
+/* ─── Rotating concept tips ──────────────────── */
+const TIPS = [
+  { t:'💡 vTaskDelay()',
+    b:'When a task calls vTaskDelay(), it releases the CPU immediately and enters BLOCKED state. Other tasks can now run!' },
+  { t:'⚖️ Scheduler Rule',
+    b:'The scheduler always picks the highest-priority READY task. Equal priorities? Round-robin — the task that ran longest ago goes next.' },
+  { t:'💤 BLOCKED = 0% CPU',
+    b:'A BLOCKED task uses absolutely zero CPU time. This is how FreeRTOS creates the illusion of concurrent execution on a single core.' },
+  { t:'🔁 Context Switch',
+    b:'Switching between tasks takes microseconds. The scheduler saves the running task\'s registers and stack, then restores the next task\'s state.' },
+  { t:'⏱️ System Tick (1 ms)',
+    b:'Every millisecond a hardware timer fires — the FreeRTOS tick. It wakes blocked tasks and drives the scheduler. Use ⏭ Tick to step through it one tick at a time.' },
+  { t:'🚦 Priority matters!',
+    b:'TaskButton has the highest priority: whenever it wakes up it preempts whatever lower-priority task is running. Try changing the priorities!' },
+  { t:'⏹ Suspending tasks',
+    b:'Switch a task off to suspend it (vTaskSuspend). It is never scheduled until you switch it on again (vTaskResume).' },
+];
+
+let tipIdx = 0;
+function showTip() {
+  if (!simOn) return;
+  const tip = TIPS[tipIdx++ % TIPS.length];
+  document.getElementById('tip-title').textContent = tip.t;
+  document.getElementById('tip-body').textContent  = tip.b;
+  const el = document.getElementById('tip');
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 4000);
+}
+setInterval(showTip, 7000);
+
+/* ─── Init ───────────────────────────────────── */
+setSpeed(speedIdx);
+initSegs();
+setTimeout(resizeCanvas, 80);
+updateUI();
+drawTimeline();
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "Se utilizar este recurso didático em trabalhos académicos, relatórios, projetos ou apresentações, cite-o conforme abaixo:"
+title: "FreeRTOS Task Visualizer: Ferramenta Didática Interativa de Escalonamento em Tempo Real"
+version: 1.0.0
+date-released: 2026-10-08
+authors:
+  - family-names: "Barros"
+    given-names: "Manuel"
+    affiliation: "Universidade Politécnica de Tomar (UPTomar) / Instituto Politécnico de Tomar (IPT)"
+    email: "fmbarros@univpt.pt"
+repository-code: "https://github.com/fmbarros/FreeRTOS-Task-Visualizer"
+url: "https://github.com/fmbarros/FreeRTOS-Task-Visualizer"
+license: "CC-BY-NC-ND-4.0"
+keywords:
+  - "FreeRTOS"
+  - "Sistemas Operativos em Tempo Real"
+  - "RTOS"
+  - "Escalonador Preemptivo"
+  - "Sistemas Distribuídos de Controlo"
+  - "Engenharia Informática"
+  - "Engenharia Eletrotécnica"
+  - "UPTomar"
+  - "IPT"
