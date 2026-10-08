@@ -294,13 +294,15 @@ main {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  padding: 8px 12px;
-  background: rgba(13, 17, 23, 0.7);
+  padding: 10px 16px;
+  min-height: 120px;
+  background: rgba(13, 17, 23, 0.78);
   border: 1px solid var(--border);
-  border-radius: 14px;
-  opacity: 0.88;
+  border-radius: 18px;
+  opacity: 0.95;
   transition: opacity .25s ease, border-color .25s ease, transform .2s ease;
   backdrop-filter: blur(4px);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.3);
 }
 .inst-logo-wrap:hover {
   opacity: 1;
@@ -308,21 +310,21 @@ main {
   transform: translateY(-1px);
 }
 .inst-logo {
-  height: 44px;
+  height: 60px;
   width: auto;
-  max-width: 135px;
+  max-width: 175px;
   object-fit: contain;
-  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.6));
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.65));
   pointer-events: none;
   -webkit-user-drag: none;
 }
 .inst-logo-label {
-  font-size: 0.56rem;
-  letter-spacing: .06em;
+  font-size: 0.62rem;
+  letter-spacing: .08em;
   color: var(--muted2);
   text-transform: uppercase;
-  margin-top: 4px;
-  font-weight: 600;
+  margin-top: 6px;
+  font-weight: 700;
 }
 .tick-col { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .cpu-glow {
